@@ -1,0 +1,41 @@
+name: Build Custom ImmortalWrt with v2rayA
+
+on:
+  workflow_dispatch:
+
+env:
+  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.2/targets/qualcommax/ipq60xx/immortalwrt-imagebuilder-23.05.2-qualcommax-ipq60xx.Linux-x86_64.tar.xz"
+  PROFILE: "qihoo_360t6u"
+  PACKAGES: "v2raya xray-core luci-app-v2raya luci-i18n-v2raya-ar -dnsmasq dnsmasq-full"
+
+jobs:
+  build:
+    name: Build Firmware using Image Builder
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
+          zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3
+
+      - name: Download and Extract Image Builder
+        run: |
+          wget -q ${{ env.IMAGE_BUILDER_URL }} -O imagebuilder.tar.xz
+          mkdir imagebuilder
+          tar -xf imagebuilder.tar.xz -C imagebuilder --strip-components=1
+
+      - name: Run Image Builder (Make Image)
+        run: |
+          cd imagebuilder
+          make image PROFILE=${{ env.PROFILE }} PACKAGES="${{ env.PACKAGES }}"
+
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 360T6U-v2raya-firmware
+          path: imagebuilder/bin/targets/*/*/*sysupgrade.bin
