@@ -71,6 +71,22 @@ jobs:
           echo
           echo "===== IMAGE DEFINITIONS ====="
           sed -n '2170,2220p' target/linux/ramips/image/mt7621.mk
+                - name: Inspect PB-Boot and image format
+        working-directory: source
+        run: |
+          echo "===== PBBOOT ====="
+          grep -RniE 'pbboot|pb-boot|pb_boot' \
+            target package 2>/dev/null | head -200 || true
+
+          echo
+          echo "===== CR660X IMAGE HELPERS ====="
+          grep -RniE 'cr660x|cr6606|cr6608|cr6609' \
+            target/linux/ramips/image 2>/dev/null | head -200 || true
+
+          echo
+          echo "===== KERNEL / UBI HELPERS ====="
+          grep -RniE 'append-kernel|append-ubi|pad-to.*KERNEL_SIZE' \
+            target/linux/ramips/image 2>/dev/null | head -200 || true
       - name: Inspect kernel version
         working-directory: source
         run: |
