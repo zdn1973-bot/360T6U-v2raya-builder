@@ -50,7 +50,27 @@ jobs:
             'cr6606|cr6608|cr6609|360t6m|360T6M' \
             target/linux/ramips/image \
             2>/dev/null || true
+      - name: Compare CR660x definitions
+        working-directory: source
+        run: |
+          echo "===== CR660X DTSI ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr660x.dtsi
 
+          echo
+          echo "===== CR6606 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6606.dts
+
+          echo
+          echo "===== CR6608 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6608.dts
+
+          echo
+          echo "===== CR6609 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6609.dts
+
+          echo
+          echo "===== IMAGE DEFINITIONS ====="
+          sed -n '2170,2220p' target/linux/ramips/image/mt7621.mk
       - name: Inspect kernel version
         working-directory: source
         run: |
