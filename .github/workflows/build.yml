@@ -1,215 +1,268 @@
-name: Inspect 360T6M Source
+name: Build 360T6M OpenWrt
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
-    name: Inspect 360T6M Source
+  build:
+    name: Build 360T6M
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc-multilib \
+            gettext \
+            git \
+            libncurses5-dev \
+            libssl-dev \
+            python3 \
+            python3-distutils \
+            rsync \
+            unzip \
+            zlib1g-dev \
+            file \
+            wget
 
-      - name: Clone 360T6M source
+      - name: Clone source
         run: |
-          git clone --depth=1 \
+          git clone \
             --branch mt7915_mtwifi \
+            --depth=1 \
             https://github.com/vb1980/padavanonly_immortalwrt.git \
             source
 
-      - name: Show source revision
+      - name: Show source
         working-directory: source
         run: |
-          echo "===== SOURCE COMMIT ====="
+          echo "===== SOURCE ====="
           git log -1 --oneline
-
-          echo
-          echo "===== SOURCE BRANCH ====="
           git branch --show-current
 
-      - name: Find 360T6M
+      - name: Create 360T6M DTS
         working-directory: source
         run: |
-          echo "===== 360T6M SEARCH ====="
+          cat > target/linux/ramips/dts/mt7621_360_t6m.dts <<'EOF'
+          // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
-          grep -RniE \
-            '360t6m|360T6M|360,360t6m' \
-            target/linux/ramips \
-            2>/dev/null || true
+          #include "mt7621.dtsi"
 
-      - name: Find CR660x DTS
+          #include <dt-bindings/gpio/gpio.h>
+          #include <dt-bindings/input/input.h>
+
+          / {
+              compatible = "360,360t6m", "mediatek,mt7621-soc";
+              model = "360T6M";
+
+              aliases {
+                  label-mac-device = &gmac0;
+              };
+
+              chosen {
+                  bootargs = "console=ttyS0,115200n8";
+              };
+          };
+
+          &nand {
+              status = "okay";
+
+              partitions {
+                  compatible = "fixed-partitions";
+                  #address-cells = <1>;
+                  #size-cells = <1>;
+
+                  partition@0 {
+                      label = "Bootloader";
+                      reg = <0x000000 0x080000>;
+                      read-only;
+                  };
+
+                  partition@80000 {
+                      label = "Nvram";
+                      reg = <0x080000 0x040000>;
+                      read-only;
+                  };
+
+                  partition@c0000 {
+                      label = "Bdata";
+                      reg = <0x0c0000 0x040000>;
+                      read-only;
+                  };
+
+                  factory: partition@100000 {
+                      label = "Factory";
+                      reg = <0x100000 0x080000>;
+                      read-only;
+                  };
+
+                  partition@180000 {
+                      label = "crash";
+                      reg = <0x180000 0x040000>;
+                      read-only;
+                  };
+
+                  partition@1c0000 {
+                      label = "crash_log";
+                      reg = <0x1c0000 0x040000>;
+                      read-only;
+                  };
+
+                  partition@200000 {
+                      label = "kernel";
+                      reg = <0x200000 0x400000>;
+                  };
+
+                  partition@600000 {
+                      label = "ubi";
+                      reg = <0x600000 0x07a00000>;
+                  };
+              };
+          };
+
+          &pcie {
+              status = "okay";
+          };
+
+          &pcie1 {
+              wifi@0,0 {
+                  compatible = "mediatek,mt76";
+                  reg = <0x0000 0 0 0 0>;
+                  mediatek,mtd-eeprom = <&factory 0x0>;
+              };
+          };
+
+          &gmac0 {
+              nvmem-cells = <&macaddr_factory_3fff4>;
+              nvmem-cell-names = "mac-address";
+          };
+
+          &gmac1 {
+              nvmem-cells = <&macaddr_factory_3fffa>;
+              nvmem-cell-names = "mac-address";
+          };
+
+          &factory {
+              compatible = "nvmem-cells";
+              #address-cells = <1>;
+              #size-cells = <1>;
+
+              macaddr_factory_3fff4: macaddr@3fff4 {
+                  reg = <0x3fff4 0x6>;
+              };
+
+              macaddr_factory_3fffa: macaddr@3fffa {
+                  reg = <0x3fffa 0x6>;
+              };
+          };
+          EOF
+
+      - name: Add 360T6M image definition
         working-directory: source
         run: |
-          echo "===== CR660X DTS FILES ====="
+          cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
 
-          find target/linux/ramips/dts \
-            -maxdepth 1 \
-            -type f \
-            -iname '*cr660*' \
-            -print \
-            | sort
+          define Device/360_t6m
+            $(Device/xiaomi_nand_separate)
+            DEVICE_VENDOR := 360
+            DEVICE_MODEL := T6M
+            DEVICE_DTS := mt7621_360_t6m
+            IMAGE_SIZE := 128512k
+            DEVICE_PACKAGES += uboot-envtools
+          endef
 
-      - name: Inspect MT7621 image definitions
+          TARGET_DEVICES += 360_t6m
+
+          EOF
+
+      - name: Verify DTS and image definition
         working-directory: source
         run: |
-          echo "===== MT7621 IMAGE DEFINITIONS ====="
+          echo "===== 360T6M DTS ====="
+          test -f target/linux/ramips/dts/mt7621_360_t6m.dts
+          sed -n '1,260p' \
+            target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          grep -RniE \
-            'cr6606|cr6608|cr6609|360t6m|360T6M' \
-            target/linux/ramips/image \
-            2>/dev/null \
-            | head -200 || true
-
-      - name: Read CR660x DTSI
-        working-directory: source
-        run: |
-          echo "===== CR660X DTSI ====="
-
-          cat \
-            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr660x.dtsi
-
-      - name: Read CR6606 DTS
-        working-directory: source
-        run: |
-          echo "===== CR6606 DTS ====="
-
-          cat \
-            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6606.dts
-
-      - name: Read CR6608 DTS
-        working-directory: source
-        run: |
-          echo "===== CR6608 DTS ====="
-
-          cat \
-            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6608.dts
-
-      - name: Read CR6609 DTS
-        working-directory: source
-        run: |
-          echo "===== CR6609 DTS ====="
-
-          cat \
-            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6609.dts
-
-      - name: Read CR660x image definition
-        working-directory: source
-        run: |
-          echo "===== CR660X IMAGE DEFINITION ====="
-
-          sed -n '2170,2220p' \
+          echo
+          echo "===== 360T6M IMAGE ====="
+          grep -n -A12 -B2 \
+            'Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
 
-      - name: Inspect PB-Boot
+      - name: Build 360T6M firmware
         working-directory: source
         run: |
-          echo "===== PBBOOT SEARCH ====="
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-          grep -RniE \
-            'pbboot|pb-boot|pb_boot' \
-            target package \
-            2>/dev/null \
-            | head -200 || true
+          make defconfig
 
-      - name: Inspect CR660x image helpers
+          make \
+            target/linux/ramips/image/mt7621/compile \
+            V=s \
+            -j2
+
+      - name: Find firmware
         working-directory: source
         run: |
-          echo "===== CR660X IMAGE HELPERS ====="
+          echo "===== BUILD OUTPUT ====="
 
-          grep -RniE \
-            'cr660x|cr6606|cr6608|cr6609' \
-            target/linux/ramips/image \
-            2>/dev/null \
-            | head -200 || true
-
-      - name: Inspect kernel and UBI helpers
-        working-directory: source
-        run: |
-          echo "===== KERNEL AND UBI HELPERS ====="
-
-          grep -RniE \
-            'append-kernel|append-ubi|pad-to.*KERNEL_SIZE' \
-            target/linux/ramips/image \
-            2>/dev/null \
-            | head -200 || true
-
-      - name: Inspect MT7621 target
-        working-directory: source
-        run: |
-          echo "===== MT7621 TARGET ====="
-
-          cat target/linux/ramips/mt7621/target.mk
-
-      - name: Inspect MT7621 kernel configuration
-        working-directory: source
-        run: |
-          echo "===== MT7621 CONFIG FILES ====="
-
-          find target/linux/ramips/mt7621 \
-            -maxdepth 1 \
+          find bin/targets/ramips/mt7621 \
+            -maxdepth 2 \
             -type f \
+            \( \
+              -name '*360*' \
+              -o \
+              -name '*t6m*' \
+              -o \
+              -name '*pbboot*' \
+            \) \
             -print \
             | sort
 
           echo
-          echo "===== KERNEL CONFIG ====="
+          echo "===== ALL IMAGES ====="
 
-          for file in target/linux/ramips/mt7621/config-*; do
-            if [ -f "$file" ]; then
-              echo "----- $file -----"
-              head -40 "$file"
-            fi
-          done
-
-      - name: Final summary
-        working-directory: source
-        run: |
-          echo "=========================================="
-          echo "360T6M SOURCE INSPECTION COMPLETED"
-          echo "=========================================="
-
-          echo
-          echo "Current source:"
-          git log -1 --oneline
-
-          echo
-          echo "Available CR660x DTS files:"
-          find target/linux/ramips/dts \
-            -maxdepth 1 \
+          find bin/targets/ramips/mt7621 \
+            -maxdepth 2 \
             -type f \
-            -iname '*cr660*' \
+            -name '*.bin' \
             -print \
             | sort
 
-          echo
-          echo "360T6M references:"
-          grep -RniE \
-            '360t6m|360T6M|360,360t6m' \
-            target/linux/ramips \
-            2>/dev/null \
-            | head -50 || true
-
-          echo
-          echo "Inspection only."
-          echo "No firmware was built."
-          echo "No device image was generated."
-      - name: Inspect PB-Boot device definition
-        working-directory: source
+      - name: Package firmware
+        if: success()
         run: |
-          echo "===== PBBOOT DEVICE DEFINITION ====="
+          mkdir -p artifact
 
-          sed -n '2060,2120p' \
-            target/linux/ramips/image/mt7621.mk
+          find source/bin/targets/ramips/mt7621 \
+            -type f \
+            \( \
+              -name '*360*' \
+              -o \
+              -name '*t6m*' \
+              -o \
+              -name '*pbboot*' \
+            \) \
+            -exec cp {} artifact/ \; \
+            || true
 
-          echo
-          echo "===== PBBOOT REFERENCES ====="
+          cp -r source/bin/targets/ramips/mt7621 \
+            artifact/target-output
 
-          grep -RniE \
-            'pbboot.bin|kernel1.bin|rootfs0.bin|breed.bin' \
-            target/linux/ramips/image \
-            2>/dev/null \
-            | head -100 || true
+          tar -czf 360T6M-firmware.tar.gz \
+            -C artifact .
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: 360T6M-firmware
+          path: 360T6M-firmware.tar.gz
+          if-no-files-found: error
