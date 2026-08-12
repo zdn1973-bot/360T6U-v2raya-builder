@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.4/targets/qualcommax/ipq60xx/immortalwrt-imagebuilder-23.05.4-qualcommax-ipq60xx.Linux-x86_64.tar.xz"
+  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.7/targets/ipq807x/generic/immortalwrt-imagebuilder-23.05.7-ipq807x-generic.Linux-x86_64.tar.xz"
   PROFILE: "qihoo_360t6u"
   PACKAGES: "v2raya xray-core luci-app-v2raya luci-i18n-v2raya-ar -dnsmasq dnsmasq-full"
 
