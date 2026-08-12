@@ -1,11 +1,11 @@
-name: Build Custom ImmortalWrt with v2rayA
+name: Build Custom ImmortalWrt for 360T6M with v2rayA
 
 on:
   workflow_dispatch:
 
 env:
-  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.7/targets/ipq807x/generic/immortalwrt-imagebuilder-23.05.7-ipq807x-generic.Linux-x86_64.tar.xz"
-  PROFILE: "qihoo_360t6u"
+  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.5/targets/ramips/mt7621/immortalwrt-imagebuilder-23.05.5-ramips-mt7621.Linux-x86_64.tar.xz"
+  PROFILE: "360_360t6m"
   PACKAGES: "v2raya xray-core luci-app-v2raya luci-i18n-v2raya-ar -dnsmasq dnsmasq-full"
 
 jobs:
@@ -29,14 +29,6 @@ jobs:
           mkdir imagebuilder
           tar -xf imagebuilder.tar.xz -C imagebuilder --strip-components=1
 
-      - name: Find Profile Name (Make Info)
-        run: |
-          cd imagebuilder
-          echo "======================================"
-          echo "قائمة الأجهزة المدعومة:"
-          make info
-          echo "======================================"
-
       - name: Run Image Builder (Make Image)
         run: |
           cd imagebuilder
@@ -45,5 +37,5 @@ jobs:
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 360T6U-v2raya-firmware
+          name: 360T6M-v2raya-firmware
           path: imagebuilder/bin/targets/*/*/*sysupgrade.bin
