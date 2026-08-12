@@ -29,6 +29,14 @@ jobs:
           mkdir imagebuilder
           tar -xf imagebuilder.tar.xz -C imagebuilder --strip-components=1
 
+      - name: Find Profile Name (Make Info)
+        run: |
+          cd imagebuilder
+          echo "======================================"
+          echo "بحث عن اسم راوتر 360 في القائمة:"
+          make info | grep -i "360"
+          echo "======================================"
+
       - name: Run Image Builder (Make Image)
         run: |
           cd imagebuilder
