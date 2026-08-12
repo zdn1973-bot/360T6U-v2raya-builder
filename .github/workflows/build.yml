@@ -1,49 +1,62 @@
-name: Build Custom ImmortalWrt for 360T6M with v2rayA
+name: Check 360T6M Source
 
 on:
   workflow_dispatch:
 
-env:
-  IMAGE_BUILDER_URL: "https://downloads.immortalwrt.org/releases/23.05.7/targets/ramips/mt7621/immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz"
-  PROFILE: "360_360t6m"
-  PACKAGES: "v2raya xray-core luci-app-v2raya luci-i18n-v2raya-ar -dnsmasq dnsmasq-full"
-
 jobs:
-  build:
-    name: Build Firmware using Image Builder
+  inspect:
+    name: Inspect ImmortalWrt source for 360T6M
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
-          zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3
+          sudo apt-get install -y git
 
-      - name: Download and Extract Image Builder
+      - name: Clone ImmortalWrt
         run: |
-          wget -q ${{ env.IMAGE_BUILDER_URL }} -O imagebuilder.tar.xz
-          mkdir imagebuilder
-          tar -xf imagebuilder.tar.xz -C imagebuilder --strip-components=1
+          git clone --depth=1 https://github.com/immortalwrt/immortalwrt.git immortalwrt
 
-      - name: Find Profile Name (Make Info)
+      - name: Show source information
+        working-directory: immortalwrt
         run: |
-          cd imagebuilder
-          echo "======================================"
-          echo "بحث عن أجهزة t6 في القائمة:"
-          make info | grep -i "t6" || true
-          echo "======================================"
+          echo "===== SOURCE ====="
+          git log -1 --oneline
+          echo
+          echo "===== TARGET ====="
+          ls -la target/linux/ramips/
+          echo
+          echo "===== MT7621 ====="
+          ls -la target/linux/ramips/mt7621/
+          echo
+          echo "===== SEARCH 360T6M ====="
+          grep -RniE '360t6m|360T6M|360,360t6m' \
+            target/linux/ramips 2>/dev/null || true
 
-      - name: Run Image Builder (Make Image)
+      - name: Search all source files
+        working-directory: immortalwrt
         run: |
-          cd imagebuilder
-          make image PROFILE=${{ env.PROFILE }} PACKAGES="${{ env.PACKAGES }}"
+          echo "===== GLOBAL SEARCH ====="
+          grep -RniE '360t6m|360T6M|360,360t6m' \
+            . 2>/dev/null | head -200 || true
 
-      - name: Upload Firmware Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: 360T6M-v2raya-firmware
-          path: imagebuilder/bin/targets/*/*/*sysupgrade.bin
+      - name: List MT7621 DTS files
+        working-directory: immortalwrt
+        run: |
+          echo "===== MT7621 DTS ====="
+          find target/linux/ramips/dts \
+            -maxdepth 1 -type f \
+            -iname '*mt7621*' \
+            -o -iname '*360*' \
+            -o -iname '*t6m*' \
+            | sort
+
+      - name: Search CR660x relationship
+        working-directory: immortalwrt
+        run: |
+          echo "===== CR660X ====="
+          grep -RniE 'cr6606|cr6608|cr6609|cr660x' \
+            target/linux/ramips/dts \
+            target/linux/ramips/image \
+            2>/dev/null | head -200 || true
