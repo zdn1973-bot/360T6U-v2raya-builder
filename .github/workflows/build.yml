@@ -12,6 +12,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             build-essential \
             clang \
@@ -22,15 +23,23 @@ jobs:
             gcc-multilib \
             gettext \
             git \
-            libncurses5-dev \
+            libncurses-dev \
             libssl-dev \
             python3 \
-            python3-distutils \
+            python3-setuptools \
             rsync \
             unzip \
             zlib1g-dev \
             file \
-            wget
+            wget \
+            xsltproc \
+            swig \
+            time \
+            ccache \
+            perl
+
+          python3 --version
+          python3 -c "import setuptools; print('setuptools OK')"
 
       - name: Clone source
         run: |
@@ -182,34 +191,48 @@ jobs:
 
           EOF
 
-      - name: Verify DTS and image definition
+      - name: Verify DTS
         working-directory: source
         run: |
           echo "===== 360T6M DTS ====="
+
           test -f target/linux/ramips/dts/mt7621_360_t6m.dts
+
           sed -n '1,260p' \
             target/linux/ramips/dts/mt7621_360_t6m.dts
 
           echo
-          echo "===== 360T6M IMAGE ====="
+          echo "===== IMAGE DEFINITION ====="
+
           grep -n -A12 -B2 \
             'Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
 
-      - name: Build 360T6M firmware
+      - name: Update feeds
         working-directory: source
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Configure build
+        working-directory: source
+        run: |
           make defconfig
 
-          make \
-            target/linux/ramips/image/mt7621/compile \
+      - name: Download sources
+        working-directory: source
+        run: |
+          make download -j2 V=s
+
+      - name: Build firmware
+        working-directory: source
+        run: |
+          make target/linux/ramips/image/mt7621/compile \
             V=s \
             -j2
 
-      - name: Find firmware
+      - name: Show build output
+        if: always()
         working-directory: source
         run: |
           echo "===== BUILD OUTPUT ====="
@@ -219,23 +242,21 @@ jobs:
             -type f \
             \( \
               -name '*360*' \
-              -o \
-              -name '*t6m*' \
-              -o \
-              -name '*pbboot*' \
+              -o -name '*t6m*' \
+              -o -name '*pbboot*' \
             \) \
             -print \
-            | sort
+            | sort || true
 
           echo
-          echo "===== ALL IMAGES ====="
+          echo "===== ALL BIN FILES ====="
 
           find bin/targets/ramips/mt7621 \
             -maxdepth 2 \
             -type f \
             -name '*.bin' \
             -print \
-            | sort
+            | sort || true
 
       - name: Package firmware
         if: success()
@@ -246,10 +267,8 @@ jobs:
             -type f \
             \( \
               -name '*360*' \
-              -o \
-              -name '*t6m*' \
-              -o \
-              -name '*pbboot*' \
+              -o -name '*t6m*' \
+              -o -name '*pbboot*' \
             \) \
             -exec cp {} artifact/ \; \
             || true
@@ -261,6 +280,7 @@ jobs:
             -C artifact .
 
       - name: Upload firmware
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: 360T6M-firmware
