@@ -1,62 +1,66 @@
-name: Check 360T6M Source
+name: Find 360T6M Source
 
 on:
   workflow_dispatch:
 
 jobs:
   inspect:
-    name: Inspect ImmortalWrt source for 360T6M
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install dependencies
+      - name: Clone 360T6M source
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git
+          git clone --depth=1 \
+            --branch mt7915_mtwifi \
+            https://github.com/vb1980/padavanonly_immortalwrt.git \
+            source
 
-      - name: Clone ImmortalWrt
+      - name: Show source revision
+        working-directory: source
         run: |
-          git clone --depth=1 https://github.com/immortalwrt/immortalwrt.git immortalwrt
-
-      - name: Show source information
-        working-directory: immortalwrt
-        run: |
-          echo "===== SOURCE ====="
+          echo "===== COMMIT ====="
           git log -1 --oneline
           echo
-          echo "===== TARGET ====="
-          ls -la target/linux/ramips/
-          echo
-          echo "===== MT7621 ====="
-          ls -la target/linux/ramips/mt7621/
-          echo
-          echo "===== SEARCH 360T6M ====="
-          grep -RniE '360t6m|360T6M|360,360t6m' \
-            target/linux/ramips 2>/dev/null || true
+          echo "===== BRANCH ====="
+          git branch --show-current
 
-      - name: Search all source files
-        working-directory: immortalwrt
+      - name: Find 360T6M
+        working-directory: source
         run: |
-          echo "===== GLOBAL SEARCH ====="
-          grep -RniE '360t6m|360T6M|360,360t6m' \
-            . 2>/dev/null | head -200 || true
+          echo "===== 360T6M SEARCH ====="
+          grep -RniE \
+            '360t6m|360T6M|360,360t6m' \
+            target/linux/ramips \
+            2>/dev/null || true
 
-      - name: List MT7621 DTS files
-        working-directory: immortalwrt
+      - name: Find CR660x DTS
+        working-directory: source
         run: |
-          echo "===== MT7621 DTS ====="
+          echo "===== CR660X DTS ====="
           find target/linux/ramips/dts \
             -maxdepth 1 -type f \
-            -iname '*mt7621*' \
-            -o -iname '*360*' \
-            -o -iname '*t6m*' \
-            | sort
+            -iname '*cr660*' \
+            -print | sort
 
-      - name: Search CR660x relationship
-        working-directory: immortalwrt
+      - name: Inspect MT7621 image definitions
+        working-directory: source
         run: |
-          echo "===== CR660X ====="
-          grep -RniE 'cr6606|cr6608|cr6609|cr660x' \
-            target/linux/ramips/dts \
+          echo "===== MT7621 IMAGE DEFINITIONS ====="
+          grep -RniE \
+            'cr6606|cr6608|cr6609|360t6m|360T6M' \
             target/linux/ramips/image \
-            2>/dev/null | head -200 || true
+            2>/dev/null || true
+
+      - name: Inspect kernel version
+        working-directory: source
+        run: |
+          echo "===== KERNEL CONFIGS ====="
+          find target/linux/ramips/mt7621 \
+            -maxdepth 1 -type f -print | sort
+
+          echo
+          echo "===== CONFIG FILES ====="
+          find target/linux/ramips \
+            -maxdepth 2 -type f \
+            -name 'config-*' \
+            -print | sort
