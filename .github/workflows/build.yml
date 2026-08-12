@@ -1,66 +1,21 @@
-name: Find 360T6M Source
-
-on:
-  workflow_dispatch:
-
-jobs:
-  inspect:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Clone 360T6M source
-        run: |
-          git clone --depth=1 \
-            --branch mt7915_mtwifi \
-            https://github.com/vb1980/padavanonly_immortalwrt.git \
-            source
-
-      - name: Show source revision
+      - name: Compare CR660x definitions
         working-directory: source
         run: |
-          echo "===== COMMIT ====="
-          git log -1 --oneline
-          echo
-          echo "===== BRANCH ====="
-          git branch --show-current
-
-      - name: Find 360T6M
-        working-directory: source
-        run: |
-          echo "===== 360T6M SEARCH ====="
-          grep -RniE \
-            '360t6m|360T6M|360,360t6m' \
-            target/linux/ramips \
-            2>/dev/null || true
-
-      - name: Find CR660x DTS
-        working-directory: source
-        run: |
-          echo "===== CR660X DTS ====="
-          find target/linux/ramips/dts \
-            -maxdepth 1 -type f \
-            -iname '*cr660*' \
-            -print | sort
-
-      - name: Inspect MT7621 image definitions
-        working-directory: source
-        run: |
-          echo "===== MT7621 IMAGE DEFINITIONS ====="
-          grep -RniE \
-            'cr6606|cr6608|cr6609|360t6m|360T6M' \
-            target/linux/ramips/image \
-            2>/dev/null || true
-
-      - name: Inspect kernel version
-        working-directory: source
-        run: |
-          echo "===== KERNEL CONFIGS ====="
-          find target/linux/ramips/mt7621 \
-            -maxdepth 1 -type f -print | sort
+          echo "===== CR660X DTSI ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr660x.dtsi
 
           echo
-          echo "===== CONFIG FILES ====="
-          find target/linux/ramips \
-            -maxdepth 2 -type f \
-            -name 'config-*' \
-            -print | sort
+          echo "===== CR6606 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6606.dts
+
+          echo
+          echo "===== CR6608 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6608.dts
+
+          echo
+          echo "===== CR6609 DTS ====="
+          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6609.dts
+
+          echo
+          echo "===== IMAGE DEFINITIONS ====="
+          sed -n '2170,2220p' target/linux/ramips/image/mt7621.mk
