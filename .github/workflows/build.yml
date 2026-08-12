@@ -10,14 +10,9 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # 1. BUILD DEPENDENCIES
-      # ============================================================
-
       - name: Install build dependencies
         run: |
           sudo apt-get update
-
           sudo apt-get install -y \
             build-essential \
             clang \
@@ -50,18 +45,11 @@ jobs:
             libelf-dev \
             device-tree-compiler
 
-          echo "===== HOST PYTHON ====="
+          echo "===== PYTHON ====="
           python3 --version
 
-          echo "===== DISTUTILS TEST ====="
-          python3 -c "import distutils; print('distutils: OK')"
-
-          echo "===== PYTHON PATH ====="
-          command -v python3
-
-      # ============================================================
-      # 2. CLONE SOURCE
-      # ============================================================
+          echo "===== DISTUTILS ====="
+          python3 -c "import distutils; print('distutils OK')"
 
       - name: Clone source
         run: |
@@ -71,159 +59,137 @@ jobs:
             https://github.com/vb1980/padavanonly_immortalwrt.git \
             source
 
-      # ============================================================
-      # 3. SOURCE INFORMATION
-      # ============================================================
-
-      - name: Show source information
+      - name: Show source
         working-directory: source
         run: |
-          echo "===== SOURCE COMMIT ====="
+          echo "===== SOURCE ====="
           git log -1 --oneline
-
-          echo
-          echo "===== SOURCE BRANCH ====="
           git branch --show-current
-
-          echo
-          echo "===== OPENWRT VERSION ====="
-          grep -E \
-            '^(DISTRIB_RELEASE|DISTRIB_REVISION)' \
-            include/version.mk 2>/dev/null || true
-
-      # ============================================================
-      # 4. CREATE 360T6M DTS
-      # ============================================================
 
       - name: Create 360T6M DTS
         working-directory: source
         run: |
+          rm -f target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          cat > target/linux/ramips/dts/mt7621_360_t6m.dts <<'EOF'
-          // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+          printf '%s\n' \
+          '// SPDX-License-Identifier: GPL-2.0-or-later OR MIT' \
+          '' \
+          '#include "mt7621.dtsi"' \
+          '#include <dt-bindings/gpio/gpio.h>' \
+          '#include <dt-bindings/input/input.h>' \
+          '' \
+          '/ {' \
+          '    compatible = "360,360t6m", "mediatek,mt7621-soc";' \
+          '    model = "360T6M";' \
+          '' \
+          '    aliases {' \
+          '        label-mac-device = &gmac0;' \
+          '    };' \
+          '' \
+          '    chosen {' \
+          '        bootargs = "console=ttyS0,115200n8";' \
+          '    };' \
+          '};' \
+          '' \
+          '&nand {' \
+          '    status = "okay";' \
+          '' \
+          '    partitions {' \
+          '        compatible = "fixed-partitions";' \
+          '        #address-cells = <1>;' \
+          '        #size-cells = <1>;' \
+          '' \
+          '        partition@0 {' \
+          '            label = "Bootloader";' \
+          '            reg = <0x000000 0x080000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        partition@80000 {' \
+          '            label = "Nvram";' \
+          '            reg = <0x080000 0x040000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        partition@c0000 {' \
+          '            label = "Bdata";' \
+          '            reg = <0x0c0000 0x040000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        factory: partition@100000 {' \
+          '            label = "Factory";' \
+          '            reg = <0x100000 0x080000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        partition@180000 {' \
+          '            label = "crash";' \
+          '            reg = <0x180000 0x040000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        partition@1c0000 {' \
+          '            label = "crash_log";' \
+          '            reg = <0x1c0000 0x040000>;' \
+          '            read-only;' \
+          '        };' \
+          '' \
+          '        partition@200000 {' \
+          '            label = "kernel";' \
+          '            reg = <0x200000 0x400000>;' \
+          '        };' \
+          '' \
+          '        partition@600000 {' \
+          '            label = "ubi";' \
+          '            reg = <0x600000 0x07a00000>;' \
+          '        };' \
+          '    };' \
+          '};' \
+          '' \
+          '&pcie {' \
+          '    status = "okay";' \
+          '};' \
+          '' \
+          '&pcie1 {' \
+          '    wifi@0,0 {' \
+          '        compatible = "mediatek,mt76";' \
+          '        reg = <0x0000 0 0 0 0>;' \
+          '        mediatek,mtd-eeprom = <&factory 0x0>;' \
+          '    };' \
+          '};' \
+          '' \
+          '&gmac0 {' \
+          '    nvmem-cells = <&macaddr_factory_3fff4>;' \
+          '    nvmem-cell-names = "mac-address";' \
+          '};' \
+          '' \
+          '&gmac1 {' \
+          '    nvmem-cells = <&macaddr_factory_3fffa>;' \
+          '    nvmem-cell-names = "mac-address";' \
+          '};' \
+          '' \
+          '&factory {' \
+          '    compatible = "nvmem-cells";' \
+          '    #address-cells = <1>;' \
+          '    #size-cells = <1>;' \
+          '' \
+          '    macaddr_factory_3fff4: macaddr@3fff4 {' \
+          '        reg = <0x3fff4 0x6>;' \
+          '    };' \
+          '' \
+          '    macaddr_factory_3fffa: macaddr@3fffa {' \
+          '        reg = <0x3fffa 0x6>;' \
+          '    };' \
+          '};' \
+          > target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          #include "mt7621.dtsi"
-
-          #include <dt-bindings/gpio/gpio.h>
-          #include <dt-bindings/input/input.h>
-
-          / {
-              compatible = "360,360t6m", "mediatek,mt7621-soc";
-              model = "360T6M";
-
-              aliases {
-                  label-mac-device = &gmac0;
-              };
-
-              chosen {
-                  bootargs = "console=ttyS0,115200n8";
-              };
-          };
-
-          &nand {
-              status = "okay";
-
-              partitions {
-                  compatible = "fixed-partitions";
-                  #address-cells = <1>;
-                  #size-cells = <1>;
-
-                  partition@0 {
-                      label = "Bootloader";
-                      reg = <0x000000 0x080000>;
-                      read-only;
-                  };
-
-                  partition@80000 {
-                      label = "Nvram";
-                      reg = <0x080000 0x040000>;
-                      read-only;
-                  };
-
-                  partition@c0000 {
-                      label = "Bdata";
-                      reg = <0x0c0000 0x040000>;
-                      read-only;
-                  };
-
-                  factory: partition@100000 {
-                      label = "Factory";
-                      reg = <0x100000 0x080000>;
-                      read-only;
-                  };
-
-                  partition@180000 {
-                      label = "crash";
-                      reg = <0x180000 0x040000>;
-                      read-only;
-                  };
-
-                  partition@1c0000 {
-                      label = "crash_log";
-                      reg = <0x1c0000 0x040000>;
-                      read-only;
-                  };
-
-                  partition@200000 {
-                      label = "kernel";
-                      reg = <0x200000 0x400000>;
-                  };
-
-                  partition@600000 {
-                      label = "ubi";
-                      reg = <0x600000 0x07a00000>;
-                  };
-              };
-          };
-
-          &pcie {
-              status = "okay";
-          };
-
-          &pcie1 {
-              wifi@0,0 {
-                  compatible = "mediatek,mt76";
-                  reg = <0x0000 0 0 0 0>;
-                  mediatek,mtd-eeprom = <&factory 0x0>;
-              };
-          };
-
-          &gmac0 {
-              nvmem-cells = <&macaddr_factory_3fff4>;
-              nvmem-cell-names = "mac-address";
-          };
-
-          &gmac1 {
-              nvmem-cells = <&macaddr_factory_3fffa>;
-              nvmem-cell-names = "mac-address";
-          };
-
-          &factory {
-              compatible = "nvmem-cells";
-              #address-cells = <1>;
-              #size-cells = <1>;
-
-              macaddr_factory_3fff4: macaddr@3fff4 {
-                  reg = <0x3fff4 0x6>;
-              };
-
-              macaddr_factory_3fffa: macaddr@3fffa {
-                  reg = <0x3fffa 0x6>;
-              };
-          };
-          EOF
-
-          echo "===== DTS CREATED ====="
-          ls -lh target/linux/ramips/dts/mt7621_360_t6m.dts
-
-      # ============================================================
-      # 5. ADD IMAGE DEFINITION
-      # ============================================================
+          echo "===== DTS FILE ====="
+          cat target/linux/ramips/dts/mt7621_360_t6m.dts
 
       - name: Add 360T6M image definition
         working-directory: source
         run: |
-
           cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
 
           define Device/360_t6m
@@ -239,21 +205,15 @@ jobs:
 
           EOF
 
-          echo "===== IMAGE DEFINITION ADDED ====="
-
+          echo "===== IMAGE DEFINITION ====="
           grep -n -A12 -B2 \
             'Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
 
-      # ============================================================
-      # 6. VERIFY DTS SYNTAX
-      # ============================================================
-
       - name: Verify DTS syntax
         working-directory: source
         run: |
-
-          echo "===== CHECK DTS ====="
+          echo "===== DTS CHECK ====="
 
           dtc \
             -I dts \
@@ -261,14 +221,8 @@ jobs:
             -o /tmp/360t6m.dtb \
             target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          echo
           echo "DTS compilation successful."
-
           ls -lh /tmp/360t6m.dtb
-
-      # ============================================================
-      # 7. UPDATE FEEDS
-      # ============================================================
 
       - name: Update feeds
         working-directory: source
@@ -276,80 +230,35 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ============================================================
-      # 8. CHECK BUILD PREREQUISITES
-      # ============================================================
-
-      - name: Check OpenWrt prerequisites
-        working-directory: source
-        run: |
-
-          echo "===== MAKE VERSION ====="
-          make --version | head -1
-
-          echo
-          echo "===== PYTHON ====="
-          python3 --version
-
-          echo
-          echo "===== DISTUTILS ====="
-          python3 -c "import distutils; print(distutils.__file__)"
-
-          echo
-          echo "===== DISK SPACE ====="
-          df -h .
-
-      # ============================================================
-      # 9. CONFIGURE
-      # ============================================================
-
       - name: Configure build
         working-directory: source
         env:
           FORCE_UNSAFE_CONFIGURE: "1"
         run: |
-
           make defconfig
-
-      # ============================================================
-      # 10. DOWNLOAD SOURCES
-      # ============================================================
 
       - name: Download sources
         working-directory: source
         env:
           FORCE_UNSAFE_CONFIGURE: "1"
         run: |
-
           make download -j2 V=s
 
-      # ============================================================
-      # 11. BUILD
-      # ============================================================
-
-      - name: Build 360T6M firmware
+      - name: Build 360T6M
         working-directory: source
         env:
           FORCE_UNSAFE_CONFIGURE: "1"
         run: |
-
           make \
             target/linux/ramips/image/mt7621/compile \
             V=s \
             -j2
 
-      # ============================================================
-      # 12. SHOW OUTPUT
-      # ============================================================
-
-      - name: Show build output
+      - name: Show output
         if: always()
         working-directory: source
         run: |
-
-          echo "=========================================="
-          echo "===== BUILD OUTPUT ====="
-          echo "=========================================="
+          echo "===== ALL OUTPUT ====="
 
           find bin/targets/ramips/mt7621 \
             -maxdepth 3 \
@@ -359,9 +268,7 @@ jobs:
             | sort || true
 
           echo
-          echo "=========================================="
-          echo "===== 360T6M FILES ====="
-          echo "=========================================="
+          echo "===== 360T6M OUTPUT ====="
 
           find bin/targets/ramips/mt7621 \
             -type f \
@@ -376,14 +283,9 @@ jobs:
             2>/dev/null \
             | sort || true
 
-      # ============================================================
-      # 13. PACKAGE RESULTS
-      # ============================================================
-
       - name: Package firmware
         if: success()
         run: |
-
           mkdir -p artifact
 
           find source/bin/targets/ramips/mt7621 \
@@ -402,20 +304,9 @@ jobs:
             -exec cp --parents {} artifact/ \; \
             2>/dev/null || true
 
-          echo "===== ARTIFACT CONTENT ====="
-
-          find artifact \
-            -type f \
-            -print \
-            | sort
-
           tar -czf \
             360T6M-firmware.tar.gz \
             -C artifact .
-
-      # ============================================================
-      # 14. UPLOAD
-      # ============================================================
 
       - name: Upload firmware
         if: success()
