@@ -197,3 +197,19 @@ jobs:
           echo "Inspection only."
           echo "No firmware was built."
           echo "No device image was generated."
+      - name: Inspect PB-Boot device definition
+        working-directory: source
+        run: |
+          echo "===== PBBOOT DEVICE DEFINITION ====="
+
+          sed -n '2060,2120p' \
+            target/linux/ramips/image/mt7621.mk
+
+          echo
+          echo "===== PBBOOT REFERENCES ====="
+
+          grep -RniE \
+            'pbboot.bin|kernel1.bin|rootfs0.bin|breed.bin' \
+            target/linux/ramips/image \
+            2>/dev/null \
+            | head -100 || true
