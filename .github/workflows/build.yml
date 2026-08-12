@@ -1,13 +1,19 @@
-name: Find 360T6M Source
+name: Inspect 360T6M Source
 
 on:
   workflow_dispatch:
 
 jobs:
   inspect:
+    name: Inspect 360T6M Source
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git
+
       - name: Clone 360T6M source
         run: |
           git clone --depth=1 \
@@ -18,16 +24,18 @@ jobs:
       - name: Show source revision
         working-directory: source
         run: |
-          echo "===== COMMIT ====="
+          echo "===== SOURCE COMMIT ====="
           git log -1 --oneline
+
           echo
-          echo "===== BRANCH ====="
+          echo "===== SOURCE BRANCH ====="
           git branch --show-current
 
       - name: Find 360T6M
         working-directory: source
         run: |
           echo "===== 360T6M SEARCH ====="
+
           grep -RniE \
             '360t6m|360T6M|360,360t6m' \
             target/linux/ramips \
@@ -36,67 +44,156 @@ jobs:
       - name: Find CR660x DTS
         working-directory: source
         run: |
-          echo "===== CR660X DTS ====="
+          echo "===== CR660X DTS FILES ====="
+
           find target/linux/ramips/dts \
-            -maxdepth 1 -type f \
+            -maxdepth 1 \
+            -type f \
             -iname '*cr660*' \
-            -print | sort
+            -print \
+            | sort
 
       - name: Inspect MT7621 image definitions
         working-directory: source
         run: |
           echo "===== MT7621 IMAGE DEFINITIONS ====="
+
           grep -RniE \
             'cr6606|cr6608|cr6609|360t6m|360T6M' \
             target/linux/ramips/image \
-            2>/dev/null || true
-      - name: Compare CR660x definitions
+            2>/dev/null \
+            | head -200 || true
+
+      - name: Read CR660x DTSI
         working-directory: source
         run: |
           echo "===== CR660X DTSI ====="
-          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr660x.dtsi
 
-          echo
+          cat \
+            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr660x.dtsi
+
+      - name: Read CR6606 DTS
+        working-directory: source
+        run: |
           echo "===== CR6606 DTS ====="
-          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6606.dts
 
-          echo
+          cat \
+            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6606.dts
+
+      - name: Read CR6608 DTS
+        working-directory: source
+        run: |
           echo "===== CR6608 DTS ====="
-          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6608.dts
 
-          echo
+          cat \
+            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6608.dts
+
+      - name: Read CR6609 DTS
+        working-directory: source
+        run: |
           echo "===== CR6609 DTS ====="
-          cat target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6609.dts
 
-          echo
-          echo "===== IMAGE DEFINITIONS ====="
-          sed -n '2170,2220p' target/linux/ramips/image/mt7621.mk
-                - name: Inspect PB-Boot and image format
+          cat \
+            target/linux/ramips/dts/mt7621_xiaomi_mi-router-cr6609.dts
+
+      - name: Read CR660x image definition
         working-directory: source
         run: |
-          echo "===== PBBOOT ====="
-          grep -RniE 'pbboot|pb-boot|pb_boot' \
-            target package 2>/dev/null | head -200 || true
+          echo "===== CR660X IMAGE DEFINITION ====="
 
-          echo
+          sed -n '2170,2220p' \
+            target/linux/ramips/image/mt7621.mk
+
+      - name: Inspect PB-Boot
+        working-directory: source
+        run: |
+          echo "===== PBBOOT SEARCH ====="
+
+          grep -RniE \
+            'pbboot|pb-boot|pb_boot' \
+            target package \
+            2>/dev/null \
+            | head -200 || true
+
+      - name: Inspect CR660x image helpers
+        working-directory: source
+        run: |
           echo "===== CR660X IMAGE HELPERS ====="
-          grep -RniE 'cr660x|cr6606|cr6608|cr6609' \
-            target/linux/ramips/image 2>/dev/null | head -200 || true
 
-          echo
-          echo "===== KERNEL / UBI HELPERS ====="
-          grep -RniE 'append-kernel|append-ubi|pad-to.*KERNEL_SIZE' \
-            target/linux/ramips/image 2>/dev/null | head -200 || true
-      - name: Inspect kernel version
+          grep -RniE \
+            'cr660x|cr6606|cr6608|cr6609' \
+            target/linux/ramips/image \
+            2>/dev/null \
+            | head -200 || true
+
+      - name: Inspect kernel and UBI helpers
         working-directory: source
         run: |
-          echo "===== KERNEL CONFIGS ====="
+          echo "===== KERNEL AND UBI HELPERS ====="
+
+          grep -RniE \
+            'append-kernel|append-ubi|pad-to.*KERNEL_SIZE' \
+            target/linux/ramips/image \
+            2>/dev/null \
+            | head -200 || true
+
+      - name: Inspect MT7621 target
+        working-directory: source
+        run: |
+          echo "===== MT7621 TARGET ====="
+
+          cat target/linux/ramips/mt7621/target.mk
+
+      - name: Inspect MT7621 kernel configuration
+        working-directory: source
+        run: |
+          echo "===== MT7621 CONFIG FILES ====="
+
           find target/linux/ramips/mt7621 \
-            -maxdepth 1 -type f -print | sort
+            -maxdepth 1 \
+            -type f \
+            -print \
+            | sort
 
           echo
-          echo "===== CONFIG FILES ====="
-          find target/linux/ramips \
-            -maxdepth 2 -type f \
-            -name 'config-*' \
-            -print | sort
+          echo "===== KERNEL CONFIG ====="
+
+          for file in target/linux/ramips/mt7621/config-*; do
+            if [ -f "$file" ]; then
+              echo "----- $file -----"
+              head -40 "$file"
+            fi
+          done
+
+      - name: Final summary
+        working-directory: source
+        run: |
+          echo "=========================================="
+          echo "360T6M SOURCE INSPECTION COMPLETED"
+          echo "=========================================="
+
+          echo
+          echo "Current source:"
+          git log -1 --oneline
+
+          echo
+          echo "Available CR660x DTS files:"
+          find target/linux/ramips/dts \
+            -maxdepth 1 \
+            -type f \
+            -iname '*cr660*' \
+            -print \
+            | sort
+
+          echo
+          echo "360T6M references:"
+          grep -RniE \
+            '360t6m|360T6M|360,360t6m' \
+            target/linux/ramips \
+            2>/dev/null \
+            | head -50 || true
+
+          echo
+          echo "Inspection only."
+          echo "No firmware was built."
+          echo "No device image was generated."
