@@ -6,9 +6,14 @@ on:
 jobs:
   build:
     name: Build 360T6M
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
+
+      # ============================================================
+      # 1. BUILD DEPENDENCIES
+      # ============================================================
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -26,6 +31,7 @@ jobs:
             libncurses-dev \
             libssl-dev \
             python3 \
+            python3-distutils \
             python3-setuptools \
             rsync \
             unzip \
@@ -36,10 +42,26 @@ jobs:
             swig \
             time \
             ccache \
-            perl
+            perl \
+            patch \
+            diffutils \
+            subversion \
+            mercurial \
+            libelf-dev \
+            device-tree-compiler
 
+          echo "===== HOST PYTHON ====="
           python3 --version
-          python3 -c "import setuptools; print('setuptools OK')"
+
+          echo "===== DISTUTILS TEST ====="
+          python3 -c "import distutils; print('distutils: OK')"
+
+          echo "===== PYTHON PATH ====="
+          command -v python3
+
+      # ============================================================
+      # 2. CLONE SOURCE
+      # ============================================================
 
       - name: Clone source
         run: |
@@ -49,16 +71,34 @@ jobs:
             https://github.com/vb1980/padavanonly_immortalwrt.git \
             source
 
-      - name: Show source
+      # ============================================================
+      # 3. SOURCE INFORMATION
+      # ============================================================
+
+      - name: Show source information
         working-directory: source
         run: |
-          echo "===== SOURCE ====="
+          echo "===== SOURCE COMMIT ====="
           git log -1 --oneline
+
+          echo
+          echo "===== SOURCE BRANCH ====="
           git branch --show-current
+
+          echo
+          echo "===== OPENWRT VERSION ====="
+          grep -E \
+            '^(DISTRIB_RELEASE|DISTRIB_REVISION)' \
+            include/version.mk 2>/dev/null || true
+
+      # ============================================================
+      # 4. CREATE 360T6M DTS
+      # ============================================================
 
       - name: Create 360T6M DTS
         working-directory: source
         run: |
+
           cat > target/linux/ramips/dts/mt7621_360_t6m.dts <<'EOF'
           // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
@@ -173,9 +213,17 @@ jobs:
           };
           EOF
 
+          echo "===== DTS CREATED ====="
+          ls -lh target/linux/ramips/dts/mt7621_360_t6m.dts
+
+      # ============================================================
+      # 5. ADD IMAGE DEFINITION
+      # ============================================================
+
       - name: Add 360T6M image definition
         working-directory: source
         run: |
+
           cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
 
           define Device/360_t6m
@@ -191,22 +239,36 @@ jobs:
 
           EOF
 
-      - name: Verify DTS
-        working-directory: source
-        run: |
-          echo "===== 360T6M DTS ====="
-
-          test -f target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          sed -n '1,260p' \
-            target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          echo
-          echo "===== IMAGE DEFINITION ====="
+          echo "===== IMAGE DEFINITION ADDED ====="
 
           grep -n -A12 -B2 \
             'Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
+
+      # ============================================================
+      # 6. VERIFY DTS SYNTAX
+      # ============================================================
+
+      - name: Verify DTS syntax
+        working-directory: source
+        run: |
+
+          echo "===== CHECK DTS ====="
+
+          dtc \
+            -I dts \
+            -O dtb \
+            -o /tmp/360t6m.dtb \
+            target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          echo
+          echo "DTS compilation successful."
+
+          ls -lh /tmp/360t6m.dtb
+
+      # ============================================================
+      # 7. UPDATE FEEDS
+      # ============================================================
 
       - name: Update feeds
         working-directory: source
@@ -214,70 +276,146 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Configure build
+      # ============================================================
+      # 8. CHECK BUILD PREREQUISITES
+      # ============================================================
+
+      - name: Check OpenWrt prerequisites
         working-directory: source
         run: |
+
+          echo "===== MAKE VERSION ====="
+          make --version | head -1
+
+          echo
+          echo "===== PYTHON ====="
+          python3 --version
+
+          echo
+          echo "===== DISTUTILS ====="
+          python3 -c "import distutils; print(distutils.__file__)"
+
+          echo
+          echo "===== DISK SPACE ====="
+          df -h .
+
+      # ============================================================
+      # 9. CONFIGURE
+      # ============================================================
+
+      - name: Configure build
+        working-directory: source
+        env:
+          FORCE_UNSAFE_CONFIGURE: "1"
+        run: |
+
           make defconfig
+
+      # ============================================================
+      # 10. DOWNLOAD SOURCES
+      # ============================================================
 
       - name: Download sources
         working-directory: source
+        env:
+          FORCE_UNSAFE_CONFIGURE: "1"
         run: |
+
           make download -j2 V=s
 
-      - name: Build firmware
+      # ============================================================
+      # 11. BUILD
+      # ============================================================
+
+      - name: Build 360T6M firmware
         working-directory: source
+        env:
+          FORCE_UNSAFE_CONFIGURE: "1"
         run: |
-          make target/linux/ramips/image/mt7621/compile \
+
+          make \
+            target/linux/ramips/image/mt7621/compile \
             V=s \
             -j2
+
+      # ============================================================
+      # 12. SHOW OUTPUT
+      # ============================================================
 
       - name: Show build output
         if: always()
         working-directory: source
         run: |
+
+          echo "=========================================="
           echo "===== BUILD OUTPUT ====="
+          echo "=========================================="
 
           find bin/targets/ramips/mt7621 \
-            -maxdepth 2 \
+            -maxdepth 3 \
             -type f \
-            \( \
-              -name '*360*' \
-              -o -name '*t6m*' \
-              -o -name '*pbboot*' \
-            \) \
             -print \
+            2>/dev/null \
             | sort || true
 
           echo
-          echo "===== ALL BIN FILES ====="
+          echo "=========================================="
+          echo "===== 360T6M FILES ====="
+          echo "=========================================="
 
           find bin/targets/ramips/mt7621 \
-            -maxdepth 2 \
             -type f \
-            -name '*.bin' \
+            \( \
+              -iname '*360*' \
+              -o \
+              -iname '*t6m*' \
+              -o \
+              -iname '*pbboot*' \
+            \) \
             -print \
+            2>/dev/null \
             | sort || true
+
+      # ============================================================
+      # 13. PACKAGE RESULTS
+      # ============================================================
 
       - name: Package firmware
         if: success()
         run: |
+
           mkdir -p artifact
 
           find source/bin/targets/ramips/mt7621 \
             -type f \
             \( \
-              -name '*360*' \
-              -o -name '*t6m*' \
-              -o -name '*pbboot*' \
+              -name '*.bin' \
+              -o \
+              -name '*.tar' \
+              -o \
+              -name '*.gz' \
+              -o \
+              -name '*.manifest' \
+              -o \
+              -name '*.json' \
             \) \
-            -exec cp {} artifact/ \; \
-            || true
+            -exec cp --parents {} artifact/ \; \
+            2>/dev/null || true
 
-          cp -r source/bin/targets/ramips/mt7621 \
-            artifact/target-output
+          echo "===== ARTIFACT CONTENT ====="
 
-          tar -czf 360T6M-firmware.tar.gz \
+          find artifact \
+            -type f \
+            -print \
+            | sort
+
+          tar -czf \
+            360T6M-firmware.tar.gz \
             -C artifact .
+
+      # ============================================================
+      # 14. UPLOAD
+      # ============================================================
 
       - name: Upload firmware
         if: success()
