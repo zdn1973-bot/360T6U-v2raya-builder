@@ -29,6 +29,14 @@ jobs:
           mkdir imagebuilder
           tar -xf imagebuilder.tar.xz -C imagebuilder --strip-components=1
 
+      - name: Find Profile Name (Make Info)
+        run: |
+          cd imagebuilder
+          echo "======================================"
+          echo "قائمة الأجهزة المدعومة:"
+          make info
+          echo "======================================"
+
       - name: Run Image Builder (Make Image)
         run: |
           cd imagebuilder
