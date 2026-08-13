@@ -1,4 +1,4 @@
-name: Build 360T6M ImmortalWrt
+name: Build ImmortalWrt 360T6M
 
 on:
   workflow_dispatch:
@@ -8,96 +8,141 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
 
+      # ============================================================
+      # 1. Checkout
+      # ============================================================
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # 2. Build dependencies
+      # Python3-distutils is intentionally NOT installed:
+      # Ubuntu 24.04 no longer provides it as a separate package.
+      # ============================================================
       - name: Install build dependencies
         run: |
           sudo apt-get update
 
           sudo apt-get install -y \
-            build-essential \
-            clang \
-            flex \
+            ack \
+            antlr3 \
+            asciidoc \
+            autoconf \
+            automake \
+            autopoint \
+            binutils \
             bison \
-            g++ \
-            gawk \
-            gcc-multilib \
-            gettext \
-            git \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libssl-dev \
-            python3 \
-            python3-setuptools \
-            python3-pip \
-            rsync \
-            unzip \
-            zlib1g-dev \
-            file \
-            wget \
-            xsltproc \
-            swig \
-            time \
+            build-essential \
+            bzip2 \
             ccache \
-            perl \
-            patch \
-            diffutils \
-            subversion \
-            mercurial \
+            clang \
+            cmake \
+            cpio \
+            curl \
+            device-tree-compiler \
+            ecj \
+            fastjar \
+            flex \
+            gawk \
+            gettext \
+            gcc-multilib \
+            g++-multilib \
+            git \
+            gnutls-dev \
+            gperf \
+            help2man \
+            intltool \
+            lib32gcc-s1 \
+            libc6-dev-i386 \
             libelf-dev \
-            device-tree-compiler
+            libglib2.0-dev \
+            libgmp-dev \
+            libltdl-dev \
+            libmpc-dev \
+            libmpfr-dev \
+            libncurses-dev \
+            libpython3-dev \
+            libreadline-dev \
+            libssl-dev \
+            libtool \
+            libyaml-dev \
+            libz-dev \
+            lld \
+            llvm \
+            make \
+            ninja-build \
+            patch \
+            pkgconf \
+            python3 \
+            python3-pip \
+            python3-ply \
+            python3-pyelftools \
+            rsync \
+            squashfs-tools \
+            unzip \
+            wget \
+            zlib1g-dev
 
-          echo "===== PYTHON ====="
           python3 --version
+          dtc --version
+          gcc --version
+          make --version
 
-          echo "===== GCC ====="
-          gcc --version | head -1
-
-      - name: Clone ImmortalWrt source
+      # ============================================================
+      # 3. Find source directory
+      # ============================================================
+      - name: Locate source tree
         run: |
-          rm -rf source
+          set -eux
 
-          git clone \
-            --depth=1 \
-            --branch mt7915_mtwifi \
-            https://github.com/padavanonly/immortalwrt.git \
-            source
+          if [ -d "source" ]; then
+            echo "SOURCE_DIR=source" >> "$GITHUB_ENV"
+          else
+            echo "ERROR: source directory does not exist"
+            exit 1
+          fi
 
-          cd source
-
-          echo "===== SOURCE REVISION ====="
-          git log -1 --oneline
-
-      - name: Inspect MT7621 source
+      # ============================================================
+      # 4. Feed preparation
+      # ============================================================
+      - name: Update feeds
         working-directory: source
         run: |
-          echo "===== RAMIPS ====="
-          ls -la target/linux/ramips
+          set -eux
 
-          echo
-          echo "===== CR660X DTS ====="
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-          find target/linux/ramips/dts \
-            -maxdepth 1 \
-            -type f \
-            -iname '*cr660*' \
-            -print \
-            | sort
+      # ============================================================
+      # 5. Verify MT7621 target
+      # ============================================================
+      - name: Verify MT7621 target
+        working-directory: source
+        run: |
+          set -eux
 
-          echo
-          echo "===== CR660X IMAGE DEFINITION ====="
+          test -d target/linux/ramips
+          test -d target/linux/ramips/dts
+          test -f target/linux/ramips/image/mt7621.mk
 
-          grep -n -A20 \
-            'define Device/xiaomi_mi-router-cr660x' \
-            target/linux/ramips/image/mt7621.mk \
-            || true
+          echo "===== RAMIPS TARGET ====="
+          grep -n "ramips_mt7621" target/linux/ramips/Makefile || true
 
+      # ============================================================
+      # 6. Create 360T6M DTS
+      #
+      # This is based on the REAL DTS extracted from the working
+      # 360T6M router.
+      # ============================================================
       - name: Create 360T6M DTS
         working-directory: source
         run: |
+          set -eux
+
           cat > target/linux/ramips/dts/mt7621_360_t6m.dts <<'DTS'
           // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
@@ -110,50 +155,44 @@ jobs:
               model = "360T6M";
 
               aliases {
+                  led-boot = &led_system;
+                  led-upgrade = &led_system;
+                  led-failsafe = &led_system;
+                  serial0 = &uartlite;
                   label-mac-device = &gmac0;
               };
 
               chosen {
-                  bootargs = "console=ttyS0,115200n8";
+                  bootargs = "console=ttyS0,115200";
               };
 
               leds {
                   compatible = "gpio-leds";
 
-                  sys_yellow: sys_yellow {
-                      label = "yellow:sys";
-                      gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
+                  led_system: system {
+                      label = "green:system";
+                      gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
                   };
 
-                  sys_blue: sys_blue {
-                      label = "blue:sys";
-                      gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
-                  };
-
-                  net_yellow {
-                      label = "yellow:net";
+                  power {
+                      label = "red:power";
                       gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
-                  };
-
-                  net_blue {
-                      label = "blue:net";
-                      gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
                   };
               };
 
               keys {
                   compatible = "gpio-keys";
 
-                  reset {
-                      label = "reset";
-                      gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
-                      linux,code = <KEY_RESTART>;
-                  };
-
                   wps {
                       label = "wps";
-                      gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
+                      gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
                       linux,code = <KEY_WPS_BUTTON>;
+                  };
+
+                  reset {
+                      label = "reset";
+                      gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
+                      linux,code = <KEY_RESTART>;
                   };
               };
           };
@@ -188,6 +227,18 @@ jobs:
                       label = "Factory";
                       reg = <0x100000 0x080000>;
                       read-only;
+
+                      compatible = "nvmem-cells";
+                      #address-cells = <1>;
+                      #size-cells = <1>;
+
+                      macaddr_factory_0: macaddr@e000 {
+                          reg = <0xe000 0x6>;
+                      };
+
+                      macaddr_factory_1: macaddr@e006 {
+                          reg = <0xe006 0x6>;
+                      };
                   };
 
                   partition@180000 {
@@ -204,20 +255,26 @@ jobs:
 
                   partition@200000 {
                       label = "kernel";
-                      reg = <0x200000 0x500000>;
+                      reg = <0x200000 0x400000>;
                   };
 
-                  partition@700000 {
+                  partition@600000 {
                       label = "ubi";
-                      reg = <0x700000 0x07880000>;
+                      reg = <0x600000 0x7a00000>;
                   };
               };
           };
 
           &pcie {
               status = "okay";
+
+              reset-gpios = <&gpio 19 GPIO_ACTIVE_LOW>;
           };
 
+          /*
+           * The real 360T6M uses PCIe with an MT7915 device.
+           * EEPROM is read from Factory at offset 0.
+           */
           &pcie1 {
               wifi@0,0 {
                   compatible = "mediatek,mt76";
@@ -227,169 +284,293 @@ jobs:
           };
 
           &gmac0 {
-              nvmem-cells = <&macaddr_factory_3fff4>;
+              nvmem-cells = <&macaddr_factory_0>;
               nvmem-cell-names = "mac-address";
           };
 
           &gmac1 {
-              nvmem-cells = <&macaddr_factory_3fffa>;
+              nvmem-cells = <&macaddr_factory_1>;
               nvmem-cell-names = "mac-address";
           };
 
-          &factory {
-              compatible = "nvmem-cells";
-              #address-cells = <1>;
-              #size-cells = <1>;
+          &gsw {
+              mediatek,mdio = <&mdio>;
+              mediatek,portmap = "llllw";
+              mediatek,mcm;
+              mt7530,direct-phy-access;
 
-              macaddr_factory_3fff4: macaddr@3fff4 {
-                  reg = <0x3fff4 0x6>;
+              port@6 {
+                  reg = <6>;
+                  ethernet = <&gmac0>;
+                  phy-mode = "rgmii";
+
+                  fixed-link {
+                      speed = <1000>;
+                      full-duplex;
+                      pause;
+                  };
               };
+          };
 
-              macaddr_factory_3fffa: macaddr@3fffa {
-                  reg = <0x3fffa 0x6>;
+          &switch0 {
+              /delete-property/ compatible;
+          };
+
+          &state_default {
+              gpio {
+                  groups = "jtag", "wdt", "uart3";
+                  function = "gpio";
+              };
+          };
+
+          &pinctrl {
+              state_default: pinctrl0 {
+                  gpio {
+                      groups = "jtag", "wdt", "uart3";
+                      function = "gpio";
+                  };
               };
           };
           DTS
 
-          echo "===== DTS CREATED ====="
-          sed -n '1,240p' \
-            target/linux/ramips/dts/mt7621_360_t6m.dts
-
-      - name: Add 360T6M image definition
+      # ============================================================
+      # 7. Add 360T6M image definition
+      # ============================================================
+      - name: Add 360T6M image profile
         working-directory: source
         run: |
+          set -eux
+
           cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
 
           define Device/360_t6m
-            $(Device/xiaomi_mi-router-cr660x)
+            $(Device/dsa-migration)
+            $(Device/uimage-lzma-loader)
+
             DEVICE_VENDOR := 360
             DEVICE_MODEL := T6M
-            DEVICE_DTS := mt7621_360_t6m
-            IMAGE_SIZE := 128512k
-            DEVICE_PACKAGES += uboot-envtools
+
+            BLOCKSIZE := 128k
+            PAGESIZE := 2048
+            KERNEL_SIZE := 4096k
+
+            UBINIZE_OPTS := -E 5
+
+            IMAGE_SIZE := 124928k
+
+            IMAGES += firmware.bin
+
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+
+            IMAGE/firmware.bin := append-kernel | \
+              pad-to $$(KERNEL_SIZE) | \
+              append-ubi | \
+              check-size
+
+            DEVICE_PACKAGES += \
+              kmod-mt7915e \
+              kmod-mt7915-firmware \
+              uboot-envtools
           endef
 
           TARGET_DEVICES += 360_t6m
-
           EOF
 
-          echo "===== 360T6M DEVICE DEFINITION ====="
+      # ============================================================
+      # 8. Verify DTS syntax BEFORE starting the build
+      # ============================================================
+      - name: Validate 360T6M DTS
+        working-directory: source
+        run: |
+          set -eux
 
-          grep -n -A15 -B2 \
-            'Device/360_t6m' \
+          echo "===== DTS FILE ====="
+          sed -n '1,260p' target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          echo
+          echo "===== CHECK DTS WITH DTC ====="
+
+          dtc \
+            -I dts \
+            -O dtb \
+            -o /tmp/360t6m.dtb \
+            -i target/linux/ramips/dts \
+            target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          test -s /tmp/360t6m.dtb
+
+          echo
+          echo "DTS compilation successful."
+          ls -lh /tmp/360t6m.dtb
+
+      # ============================================================
+      # 9. Verify image profile
+      # ============================================================
+      - name: Verify 360T6M profile
+        working-directory: source
+        run: |
+          set -eux
+
+          echo "===== 360T6M PROFILE ====="
+
+          grep -n -A30 -B5 \
+            "define Device/360_t6m" \
             target/linux/ramips/image/mt7621.mk
 
-      - name: Update feeds
+          echo
+          echo "===== DTS REFERENCES ====="
+
+          grep -RniE \
+            '360_t6m|360T6M|360,360t6m' \
+            target/linux/ramips \
+            || true
+
+      # ============================================================
+      # 10. Configure target
+      # ============================================================
+      - name: Configure MT7621 / 360T6M
         working-directory: source
         run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          set -eux
 
-      - name: Configure 360T6M
-        working-directory: source
-        run: |
-          echo "===== INITIAL CONFIG ====="
-
-          cat > .config <<'EOF'
+          cat > /tmp/360t6m.config <<'EOF'
           CONFIG_TARGET_ramips=y
           CONFIG_TARGET_ramips_mt7621=y
           CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
 
-          CONFIG_PACKAGE_v2raya=y
-          CONFIG_PACKAGE_luci-app-v2raya=y
-          CONFIG_PACKAGE_xray-core=y
-          CONFIG_PACKAGE_dnsmasq-full=y
-          CONFIG_PACKAGE_iptables-mod-tproxy=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-ssl=y
+
+          CONFIG_PACKAGE_kmod-mt7915e=y
+          CONFIG_PACKAGE_kmod-mt7915-firmware=y
+
           CONFIG_PACKAGE_kmod-nf-tproxy=y
           CONFIG_PACKAGE_kmod-nft-tproxy=y
+
+          CONFIG_PACKAGE_iptables-nft=y
+          CONFIG_PACKAGE_ip6tables-nft=y
+
+          CONFIG_PACKAGE_kmod-tun=y
+          CONFIG_PACKAGE_curl=y
+          CONFIG_PACKAGE_ca-bundle=y
+          CONFIG_PACKAGE_ca-certificates=y
+          CONFIG_PACKAGE_htop=y
+          CONFIG_PACKAGE_tcpdump=y
           EOF
 
-          echo
-          echo "===== DEFCONFIG ====="
+          cp /tmp/360t6m.config .config
 
           make defconfig
 
           echo
-          echo "===== TARGET CONFIG ====="
+          echo "===== FINAL TARGET CONFIG ====="
 
           grep -E \
-            'CONFIG_TARGET_ramips|CONFIG_TARGET_ramips_mt7621|360_t6m|CONFIG_PACKAGE_v2raya|CONFIG_PACKAGE_xray-core' \
+            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|360_t6m' \
             .config \
             || true
 
-      - name: Verify 360T6M profile
+      # ============================================================
+      # 11. Check required packages exist
+      # ============================================================
+      - name: Check required packages
         working-directory: source
         run: |
-          echo "===== SEARCH 360T6M ====="
+          set -eux
 
-          grep -Rni \
-            '360_t6m' \
-            target/linux/ramips \
-            .config \
-            2>/dev/null \
-            | head -100 \
-            || true
+          echo "===== PACKAGE CHECK ====="
 
-          echo
-          echo "===== DTS FILE ====="
+          for p in \
+            kmod-mt7915e \
+            kmod-mt7915-firmware \
+            kmod-nf-tproxy \
+            kmod-nft-tproxy \
+            kmod-tun
+          do
+            echo "Checking: $p"
 
-          ls -lh \
-            target/linux/ramips/dts/mt7621_360_t6m.dts
+            grep -Rqs \
+              "Package: $p" \
+              package \
+              feeds \
+              2>/dev/null \
+              || {
+                echo "ERROR: package $p was not found"
+                exit 1
+              }
+          done
 
+      # ============================================================
+      # 12. Download sources
+      # ============================================================
       - name: Download sources
         working-directory: source
         run: |
-          echo "===== DOWNLOAD SOURCES ====="
+          set -eux
 
           make download -j2 V=s
 
+      # ============================================================
+      # 13. Build 360T6M
+      # ============================================================
       - name: Build firmware
         working-directory: source
         run: |
-          echo "===== BUILD 360T6M ====="
+          set -eux
 
-          make -j2 V=s
+          make -j$(nproc) \
+            target/linux/compile \
+            V=s
 
-      - name: Show firmware output
-        if: always()
+          make -j$(nproc) \
+            target/install \
+            V=s
+
+      # ============================================================
+      # 14. Find firmware
+      # ============================================================
+      - name: Locate firmware files
         working-directory: source
         run: |
-          echo "===== TARGET OUTPUT ====="
+          set -eux
+
+          echo "===== FIRMWARE FILES ====="
 
           find bin/targets/ramips/mt7621 \
+            -maxdepth 3 \
             -type f \
-            -print \
-            2>/dev/null \
-            | sort \
-            || true
+            -printf '%p %k KB\n' \
+            | sort
 
-          echo
-          echo "===== FILE SIZES ====="
-
-          find bin/targets/ramips/mt7621 \
-            -type f \
-            -exec ls -lh {} \; \
-            2>/dev/null \
-            || true
-
-      - name: Generate checksums
-        if: always()
+      # ============================================================
+      # 15. Verify output
+      # ============================================================
+      - name: Verify output
         working-directory: source
         run: |
-          echo "===== SHA256 ====="
+          set -eux
 
-          find bin/targets/ramips/mt7621 \
+          OUT="bin/targets/ramips/mt7621"
+
+          test -d "$OUT"
+
+          find "$OUT" \
             -type f \
-            -exec sha256sum {} \; \
-            2>/dev/null \
-            | tee /tmp/360t6m-sha256.txt \
-            || true
+            \( \
+              -name '*360*t6m*' \
+              -o -name '*360_t6m*' \
+              -o -name '*360T6M*' \
+            \) \
+            -print
 
-      - name: Upload complete firmware directory
-        if: always()
+      # ============================================================
+      # 16. Upload firmware
+      # ============================================================
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: 360T6M-ImmortalWrt-Firmware
-          path: source/bin/targets/ramips/mt7621/
+          name: ImmortalWrt-360T6M
+          path: |
+            source/bin/targets/ramips/mt7621/**/*
           if-no-files-found: error
-          compression-level: 6
+          retention-days: 30
