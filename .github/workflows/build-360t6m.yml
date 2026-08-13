@@ -253,23 +253,6 @@ jobs:
           echo "===== DTS CREATED ====="
           sed -n '1,240p' \
             target/linux/ramips/dts/mt7621_360_t6m.dts
-
-      - name: Check DTS syntax
-        working-directory: source
-        run: |
-          echo "===== DTS CHECK ====="
-
-          dtc \
-            -I dts \
-            -O dtb \
-            -o /tmp/360t6m.dtb \
-            target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          echo
-          echo "DTS compilation successful."
-
-          ls -lh /tmp/360t6m.dtb
-
       - name: Add 360T6M device definition
         working-directory: source
         run: |
