@@ -283,26 +283,34 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Configure MT7621
+        - name: Configure MT7621
         working-directory: source
         run: |
+          echo "===== CONFIGURE 360T6M ====="
+
+          cat > .config <<'EOF'
+          CONFIG_TARGET_ramips=y
+          CONFIG_TARGET_ramips_mt7621=y
+          CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
+          EOF
+
+          echo "===== RUN DEFCONFIG ====="
           make defconfig
 
+          echo
           echo "===== TARGET CONFIG ====="
 
-          grep '^CONFIG_TARGET_ramips' \
+          grep -E \
+            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|360_t6m' \
             .config \
             || true
 
-      - name: Check 360T6M profile
-        working-directory: source
-        run: |
-          echo "===== 360T6M PROFILE ====="
+          echo
+          echo "===== 360T6M PROFILE SEARCH ====="
 
           grep -Rni \
             '360_t6m' \
-            target \
-            .config \
+            target/linux/ramips \
             2>/dev/null \
             | head -100 \
             || true
@@ -310,8 +318,8 @@ jobs:
       - name: Download sources
         working-directory: source
         run: |
+          echo "===== DOWNLOAD SOURCES ====="
           make download -j2 V=s
-
       - name: Build firmware
         working-directory: source
         run: |
