@@ -32,6 +32,7 @@ jobs:
             libssl-dev \
             python3 \
             python3-setuptools \
+            python3-pip \
             rsync \
             unzip \
             zlib1g-dev \
@@ -70,7 +71,7 @@ jobs:
           echo "===== SOURCE REVISION ====="
           git log -1 --oneline
 
-      - name: Check MT7621 source
+      - name: Inspect MT7621 source
         working-directory: source
         run: |
           echo "===== RAMIPS ====="
@@ -89,7 +90,7 @@ jobs:
           echo
           echo "===== CR660X IMAGE DEFINITION ====="
 
-          grep -n -A15 \
+          grep -n -A20 \
             'define Device/xiaomi_mi-router-cr660x' \
             target/linux/ramips/image/mt7621.mk \
             || true
@@ -253,7 +254,8 @@ jobs:
           echo "===== DTS CREATED ====="
           sed -n '1,240p' \
             target/linux/ramips/dts/mt7621_360_t6m.dts
-      - name: Add 360T6M device definition
+
+      - name: Add 360T6M image definition
         working-directory: source
         run: |
           cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
@@ -271,9 +273,9 @@ jobs:
 
           EOF
 
-          echo "===== 360T6M DEVICE ====="
+          echo "===== 360T6M DEVICE DEFINITION ====="
 
-          grep -n -A12 -B2 \
+          grep -n -A15 -B2 \
             'Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
 
@@ -283,53 +285,76 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-        - name: Configure MT7621
+      - name: Configure 360T6M
         working-directory: source
         run: |
-          echo "===== CONFIGURE 360T6M ====="
+          echo "===== INITIAL CONFIG ====="
 
           cat > .config <<'EOF'
           CONFIG_TARGET_ramips=y
           CONFIG_TARGET_ramips_mt7621=y
           CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
+
+          CONFIG_PACKAGE_v2raya=y
+          CONFIG_PACKAGE_luci-app-v2raya=y
+          CONFIG_PACKAGE_xray-core=y
+          CONFIG_PACKAGE_dnsmasq-full=y
+          CONFIG_PACKAGE_iptables-mod-tproxy=y
+          CONFIG_PACKAGE_kmod-nf-tproxy=y
+          CONFIG_PACKAGE_kmod-nft-tproxy=y
           EOF
 
-          echo "===== RUN DEFCONFIG ====="
+          echo
+          echo "===== DEFCONFIG ====="
+
           make defconfig
 
           echo
           echo "===== TARGET CONFIG ====="
 
           grep -E \
-            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|360_t6m' \
+            'CONFIG_TARGET_ramips|CONFIG_TARGET_ramips_mt7621|360_t6m|CONFIG_PACKAGE_v2raya|CONFIG_PACKAGE_xray-core' \
             .config \
             || true
 
-          echo
-          echo "===== 360T6M PROFILE SEARCH ====="
+      - name: Verify 360T6M profile
+        working-directory: source
+        run: |
+          echo "===== SEARCH 360T6M ====="
 
           grep -Rni \
             '360_t6m' \
             target/linux/ramips \
+            .config \
             2>/dev/null \
             | head -100 \
             || true
+
+          echo
+          echo "===== DTS FILE ====="
+
+          ls -lh \
+            target/linux/ramips/dts/mt7621_360_t6m.dts
 
       - name: Download sources
         working-directory: source
         run: |
           echo "===== DOWNLOAD SOURCES ====="
+
           make download -j2 V=s
+
       - name: Build firmware
         working-directory: source
         run: |
+          echo "===== BUILD 360T6M ====="
+
           make -j2 V=s
 
       - name: Show firmware output
         if: always()
         working-directory: source
         run: |
-          echo "===== ALL OUTPUT ====="
+          echo "===== TARGET OUTPUT ====="
 
           find bin/targets/ramips/mt7621 \
             -type f \
@@ -339,85 +364,32 @@ jobs:
             || true
 
           echo
-          echo "===== 360T6M OUTPUT ====="
+          echo "===== FILE SIZES ====="
 
           find bin/targets/ramips/mt7621 \
             -type f \
-            \( \
-              -iname '*360*' \
-              -o \
-              -iname '*t6m*' \
-              -o \
-              -iname '*pbboot*' \
-              -o \
-              -iname '*kernel1*' \
-              -o \
-              -iname '*rootfs0*' \
-              -o \
-              -iname '*breed*' \
-            \) \
-            -print \
-            2>/dev/null \
-            | sort \
-            || true
-
-      - name: Firmware information
-        if: always()
-        working-directory: source
-        run: |
-          echo "===== FIRMWARE FILE INFORMATION ====="
-
-          find bin/targets/ramips/mt7621 \
-            -type f \
-            \( \
-              -iname '*360*' \
-              -o \
-              -iname '*t6m*' \
-              -o \
-              -iname '*pbboot*' \
-              -o \
-              -iname '*kernel1*' \
-              -o \
-              -iname '*rootfs0*' \
-              -o \
-              -iname '*breed*' \
-            \) \
             -exec ls -lh {} \; \
             2>/dev/null \
             || true
 
-      - name: Generate SHA256
-        if: success()
+      - name: Generate checksums
+        if: always()
         working-directory: source
         run: |
+          echo "===== SHA256 ====="
+
           find bin/targets/ramips/mt7621 \
             -type f \
-            \( \
-              -iname '*360*' \
-              -o \
-              -iname '*t6m*' \
-              -o \
-              -iname '*pbboot*' \
-              -o \
-              -iname '*kernel1*' \
-              -o \
-              -iname '*rootfs0*' \
-              -o \
-              -iname '*breed*' \
-            \) \
             -exec sha256sum {} \; \
-            | tee /tmp/360t6m-sha256.txt
+            2>/dev/null \
+            | tee /tmp/360t6m-sha256.txt \
+            || true
 
-      - name: Upload firmware
-        if: success()
+      - name: Upload complete firmware directory
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: 360T6M-ImmortalWrt
-          path: |
-            source/bin/targets/ramips/mt7621/**/*360*
-            source/bin/targets/ramips/mt7621/**/*t6m*
-            source/bin/targets/ramips/mt7621/**/*pbboot*
-            source/bin/targets/ramips/mt7621/**/*kernel1*
-            source/bin/targets/ramips/mt7621/**/*rootfs0*
-            source/bin/targets/ramips/mt7621/**/*breed*
-          if-no-files-found: warn
+          name: 360T6M-ImmortalWrt-Firmware
+          path: source/bin/targets/ramips/mt7621/
+          if-no-files-found: error
+          compression-level: 6
