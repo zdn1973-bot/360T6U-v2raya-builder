@@ -51,6 +51,7 @@ jobs:
             swig \
             time
 
+          echo "===== TOOL VERSIONS ====="
           python3 --version
           gcc --version
           g++ --version
@@ -71,6 +72,7 @@ jobs:
 
           cd source
 
+          echo "===== IMMORTALWRT SOURCE ====="
           git log -1 --oneline
           git branch --show-current
 
@@ -114,6 +116,8 @@ jobs:
             DEVICE_MODEL := T6M
             DEVICE_DTS := mt7621_360_t6m
 
+            SUPPORTED_DEVICES += 360,360t6m
+
             BLOCKSIZE := 128k
             PAGESIZE := 2048
             KERNEL_SIZE := 4096k
@@ -135,48 +139,51 @@ jobs:
 
           EOF
 
-      - name: Verify DTS
+      - name: Verify 360T6M files
         working-directory: source
         run: |
           set -eux
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
 
-          test -f "$DTS"
+          echo "===== DTS ====="
 
-          echo "===== DTS CHECK ====="
+          test -f "$DTS"
 
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
+
+          echo "===== NETWORK ====="
 
           grep -q 'label = "wan"' "$DTS"
           grep -q 'label = "lan1"' "$DTS"
           grep -q 'label = "lan2"' "$DTS"
           grep -q 'label = "lan3"' "$DTS"
 
+          echo "===== WIFI ====="
+
           grep -q 'compatible = "mediatek,mt76"' "$DTS"
           grep -q 'mediatek,mtd-eeprom' "$DTS"
+
+          echo "===== BUTTONS ====="
 
           grep -q 'KEY_WPS_BUTTON' "$DTS"
           grep -q 'KEY_RESTART' "$DTS"
 
+          echo "===== FLASH ====="
+
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
-          echo "===== DTS CONTENT ====="
-
-          sed -n '1,260p' "$DTS"
-
-      - name: Verify image profile
-        working-directory: source
-        run: |
-          set -eux
-
           echo "===== IMAGE PROFILE ====="
 
-          grep -n -A35 -B3 \
-            'define Device/360_t6m' \
+          grep -q 'define Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
+
+          grep -q 'SUPPORTED_DEVICES += 360,360t6m' \
+            target/linux/ramips/image/mt7621.mk
+
+          echo "360T6M source verification successful."
 
       - name: Configure MT7621
         working-directory: source
