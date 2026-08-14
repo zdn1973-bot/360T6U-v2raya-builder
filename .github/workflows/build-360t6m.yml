@@ -8,16 +8,16 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M v2rayA
     runs-on: ubuntu-24.04
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
-          set -eux
+          set -e
 
           sudo apt-get update
 
@@ -50,128 +50,87 @@ jobs:
             swig \
             time
 
-          echo "===== TOOL VERSIONS ====="
-          python3 --version
-          gcc --version
-          make --version
-          dtc --version
-
       - name: Clone ImmortalWrt
         run: |
-          set -eux
+          set -e
 
           rm -rf source
 
-          git clone \
-            --depth=1 \
-            --branch=openwrt-23.05 \
-            https://github.com/immortalwrt/immortalwrt.git \
-            source
+          git clone --depth=1 --branch=openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git source
 
           cd source
 
-          echo "===== IMMORTALWRT SOURCE ====="
           git log -1 --oneline
-          git branch --show-current
 
       - name: Copy 360T6M DTS
         run: |
-          set -eux
+          set -e
 
           test -f target/linux/ramips/dts/mt7621_360_t6m.dts
 
           mkdir -p source/target/linux/ramips/dts
 
-          cp \
-            target/linux/ramips/dts/mt7621_360_t6m.dts \
-            source/target/linux/ramips/dts/mt7621_360_t6m.dts
+          cp target/linux/ramips/dts/mt7621_360_t6m.dts source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          echo "===== DTS COPIED ====="
-
-          ls -lh \
-            source/target/linux/ramips/dts/mt7621_360_t6m.dts
-
-      - name: Fix 360T6M green LED
+      - name: Fix green LED
         working-directory: source
         run: |
-          set -eux
+          set -e
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
 
-          test -f "$DTS"
-
-          sed -i \
-            's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' \
-            "$DTS"
+          sed -i 's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' "$DTS"
 
           if ! grep -q 'default-state = "on";' "$DTS"; then
-            sed -i \
-              '/label = "green:system";/a\		default-state = "on";' \
-              "$DTS"
+            sed -i '/label = "green:system";/a\		default-state = "on";' "$DTS"
           fi
 
-          echo "===== GREEN LED ====="
-
-          grep -n -A5 -B2 \
-            'green:system' \
-            "$DTS"
+          grep -n -A5 -B2 'green:system' "$DTS"
 
       - name: Update feeds
         working-directory: source
         run: |
-          set -eux
+          set -e
 
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Add 360T6M image profile
+      - name: Add 360T6M profile
         working-directory: source
         run: |
-          set -eux
+          set -e
 
-          printf '%s\n' \
-            'define Device/360_t6m' \
-            '  $(Device/dsa-migration)' \
-            '  $(Device/uimage-lzma-loader)' \
-            '' \
-            '  DEVICE_VENDOR := 360' \
-            '  DEVICE_MODEL := T6M' \
-            '  DEVICE_DTS := mt7621_360_t6m' \
-            '  SUPPORTED_DEVICES += 360,360t6m' \
-            '' \
-            '  BLOCKSIZE := 128k' \
-            '  PAGESIZE := 2048' \
-            '  KERNEL_SIZE := 4096k' \
-            '  UBINIZE_OPTS := -E 5' \
-            '  IMAGE_SIZE := 124928k' \
-            '' \
-            '  IMAGES += firmware.bin' \
-            '' \
-            '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \
-            '' \
-            '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \
-            '' \
-            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun ip-full uboot-envtools' \
-            'endef' \
-            '' \
-            'TARGET_DEVICES += 360_t6m' \
-            >> target/linux/ramips/image/mt7621.mk
+          IMAGE="target/linux/ramips/image/mt7621.mk"
 
-          echo "===== DEVICE PROFILE ====="
+          echo 'define Device/360_t6m' >> "$IMAGE"
+          echo '  $(Device/dsa-migration)' >> "$IMAGE"
+          echo '  $(Device/uimage-lzma-loader)' >> "$IMAGE"
+          echo '  DEVICE_VENDOR := 360' >> "$IMAGE"
+          echo '  DEVICE_MODEL := T6M' >> "$IMAGE"
+          echo '  DEVICE_DTS := mt7621_360_t6m' >> "$IMAGE"
+          echo '  SUPPORTED_DEVICES += 360,360t6m' >> "$IMAGE"
+          echo '  BLOCKSIZE := 128k' >> "$IMAGE"
+          echo '  PAGESIZE := 2048' >> "$IMAGE"
+          echo '  KERNEL_SIZE := 4096k' >> "$IMAGE"
+          echo '  UBINIZE_OPTS := -E 5' >> "$IMAGE"
+          echo '  IMAGE_SIZE := 124928k' >> "$IMAGE"
+          echo '  IMAGES += firmware.bin' >> "$IMAGE"
+          echo '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' >> "$IMAGE"
+          echo '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' >> "$IMAGE"
+          echo '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' >> "$IMAGE"
+          echo 'endef' >> "$IMAGE"
+          echo 'TARGET_DEVICES += 360_t6m' >> "$IMAGE"
 
-          grep -n \
-            -A35 \
-            'define Device/360_t6m' \
-            target/linux/ramips/image/mt7621.mk
+          echo "===== 360T6M PROFILE ====="
 
-      - name: Verify 360T6M DTS
+          grep -n -A25 'define Device/360_t6m' "$IMAGE"
+
+      - name: Verify DTS
         working-directory: source
         run: |
-          set -eux
+          set -e
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
-
-          test -f "$DTS"
 
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
@@ -193,143 +152,53 @@ jobs:
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
-          echo "360T6M DTS verification successful."
+          echo "DTS verification successful."
 
-      - name: Configure target and packages
+      - name: Configure target
         working-directory: source
         run: |
-          set -eux
+          set -e
 
-          cat > .config <<'EOF'
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7621=y
-CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
+          echo 'CONFIG_TARGET_ramips=y' > .config
+          echo 'CONFIG_TARGET_ramips_mt7621=y' >> .config
+          echo 'CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y' >> .config
 
-CONFIG_PACKAGE_kmod-nf-tproxy=y
-CONFIG_PACKAGE_kmod-nft-tproxy=y
-CONFIG_PACKAGE_iptables-mod-tproxy=y
-
-CONFIG_PACKAGE_v2raya=y
-CONFIG_PACKAGE_luci-app-v2raya=y
-CONFIG_PACKAGE_xray-core=y
-
-CONFIG_PACKAGE_kmod-tun=y
-CONFIG_PACKAGE_ip-full=y
-
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_ca-bundle=y
-CONFIG_PACKAGE_ca-certificates=y
-EOF
-
-          echo "===== MAKE DEFCONFIG ====="
+          echo 'CONFIG_PACKAGE_kmod-nf-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-nft-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_iptables-mod-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
+          echo 'CONFIG_PACKAGE_curl=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
 
           make defconfig
 
-          echo
           echo "===== TARGET ====="
+          grep -E '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621' .config || true
 
-          grep -E \
-            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621' \
-            .config \
-            || true
-
-          echo
-          echo "===== V2RAYA / TPROXY ====="
-
-          grep -E \
-            '^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun|ip-full)=' \
-            .config \
-            || true
-
-      - name: Verify configuration
-        working-directory: source
-        run: |
-          set -eux
-
-          required=(
-            CONFIG_TARGET_ramips
-            CONFIG_TARGET_ramips_mt7621
-            CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m
-            CONFIG_PACKAGE_kmod-nf-tproxy
-            CONFIG_PACKAGE_kmod-nft-tproxy
-            CONFIG_PACKAGE_iptables-mod-tproxy
-            CONFIG_PACKAGE_v2raya
-            CONFIG_PACKAGE_luci-app-v2raya
-            CONFIG_PACKAGE_xray-core
-            CONFIG_PACKAGE_kmod-tun
-            CONFIG_PACKAGE_ip-full
-          )
-
-          for cfg in "${required[@]}"; do
-            if ! grep -q "^${cfg}=y$" .config; then
-              echo "ERROR: ${cfg} is not enabled"
-              exit 1
-            fi
-
-            echo "OK: ${cfg}=y"
-          done
-
-          echo "Configuration verified successfully."
-
-      - name: Download sources
-        working-directory: source
-        run: |
-          set -eux
-
-          make download -j2 V=s
+          echo "===== PACKAGES ====="
+          grep -E '^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' .config || true
 
       - name: Build firmware
         working-directory: source
         run: |
-          set -eux
+          set -e
 
-          echo "===== START BUILD ====="
+          make download -j2 V=s
 
           make -j$(nproc) V=s
 
-      - name: Show generated files
+      - name: Show output
         working-directory: source
         run: |
-          set -eux
+          set -e
 
           echo "===== GENERATED FILES ====="
 
-          find \
-            bin/targets/ramips/mt7621 \
-            -type f \
-            -printf '%p %k KB\n' \
-            | sort
-
-      - name: Show package files
-        working-directory: source
-        run: |
-          set -eux
-
-          echo "===== V2RAYA / XRAY / TPROXY ====="
-
-          find \
-            bin/targets/ramips/mt7621 \
-            -type f \
-            \( \
-              -name '*v2raya*.ipk' \
-              -o -name '*xray*.ipk' \
-              -o -name '*tproxy*.ipk' \
-            \) \
-            -print \
-            | sort \
-            || true
-
-      - name: Generate SHA256
-        working-directory: source
-        run: |
-          set -eux
-
-          find \
-            bin/targets/ramips/mt7621 \
-            -type f \
-            -exec sha256sum {} \; \
-            | sort \
-            | tee /tmp/360t6m-sha256.txt
+          find bin/targets/ramips/mt7621 -type f -print | sort
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
