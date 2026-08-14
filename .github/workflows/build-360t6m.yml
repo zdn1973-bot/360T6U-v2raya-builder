@@ -13,16 +13,9 @@ jobs:
 
     steps:
 
-      # ==========================================================
-      # 1. Checkout repository
-      # ==========================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================================
-      # 2. Install build dependencies
-      # ==========================================================
       - name: Install build dependencies
         run: |
           set -eux
@@ -59,17 +52,12 @@ jobs:
             time
 
           echo "===== TOOL VERSIONS ====="
-
           python3 --version
           gcc --version
           g++ --version
           make --version
           dtc --version
 
-
-      # ==========================================================
-      # 3. Clone ImmortalWrt
-      # ==========================================================
       - name: Clone ImmortalWrt
         run: |
           set -eux
@@ -85,14 +73,9 @@ jobs:
           cd source
 
           echo "===== IMMORTALWRT SOURCE ====="
-
           git log -1 --oneline
           git branch --show-current
 
-
-      # ==========================================================
-      # 4. Copy 360T6M DTS
-      # ==========================================================
       - name: Copy 360T6M DTS
         run: |
           set -eux
@@ -106,17 +89,9 @@ jobs:
             source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
           echo "===== DTS COPIED ====="
-
           ls -lh \
             source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
-
-      # ==========================================================
-      # 5. Fix real hardware LED polarity
-      #
-      # Hardware test on the working 360T6M proved:
-      # GPIO15 green system LED is ACTIVE LOW.
-      # ==========================================================
       - name: Fix 360T6M green LED
         working-directory: source
         run: |
@@ -130,20 +105,17 @@ jobs:
             's/gpios = <\&gpio 15 GPIO_ACTIVE_HIGH>;/gpios = <\&gpio 15 GPIO_ACTIVE_LOW>;/g' \
             "$DTS"
 
-          sed -i \
-            '/label = "green:system";/a\			default-state = "on";' \
-            "$DTS"
+          if ! grep -q 'default-state = "on";' "$DTS"; then
+            sed -i \
+              '/label = "green:system";/a\		default-state = "on";' \
+              "$DTS"
+          fi
 
           echo "===== GREEN LED ====="
-
           grep -n -A5 -B2 \
             'green:system' \
             "$DTS"
 
-
-      # ==========================================================
-      # 6. Update feeds
-      # ==========================================================
       - name: Update feeds
         working-directory: source
         run: |
@@ -152,11 +124,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-
-      # ==========================================================
-      # 7. Verify DTS
-      # ==========================================================
-      - name: Verify 360T6M DTS
+      - name: Verify DTS
         working-directory: source
         run: |
           set -eux
@@ -166,50 +134,34 @@ jobs:
           test -f "$DTS"
 
           echo "===== DEVICE ====="
-
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
 
-          echo
           echo "===== NETWORK ====="
-
           grep -q 'label = "wan"' "$DTS"
           grep -q 'label = "lan1"' "$DTS"
           grep -q 'label = "lan2"' "$DTS"
           grep -q 'label = "lan3"' "$DTS"
 
-          echo
           echo "===== WIFI ====="
-
           grep -q 'compatible = "mediatek,mt76"' "$DTS"
           grep -q 'mediatek,mtd-eeprom' "$DTS"
 
-          echo
           echo "===== LED ====="
-
           grep -q 'label = "green:system"' "$DTS"
           grep -q 'GPIO_ACTIVE_LOW' "$DTS"
           grep -q 'default-state = "on"' "$DTS"
 
-          echo
           echo "===== BUTTONS ====="
-
           grep -q 'KEY_WPS_BUTTON' "$DTS"
           grep -q 'KEY_RESTART' "$DTS"
 
-          echo
           echo "===== FLASH ====="
-
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
-          echo
           echo "360T6M DTS verification successful."
 
-
-      # ==========================================================
-      # 8. Check DTS syntax
-      # ==========================================================
       - name: Check DTS syntax
         working-directory: source
         run: |
@@ -226,13 +178,9 @@ jobs:
 
           test -s /tmp/360t6m.dtb
 
-          echo "===== DTS COMPILATION SUCCESSFUL ====="
+          echo "DTS compilation successful."
           ls -lh /tmp/360t6m.dtb
 
-
-      # ==========================================================
-      # 9. Add 360T6M image profile
-      # ==========================================================
       - name: Add 360T6M image profile
         working-directory: source
         run: |
@@ -254,7 +202,6 @@ define Device/360_t6m
   KERNEL_SIZE := 4096k
 
   UBINIZE_OPTS := -E 5
-
   IMAGE_SIZE := 124928k
 
   IMAGES += firmware.bin
@@ -282,10 +229,6 @@ EOF
           cat /tmp/360t6m-device.mk \
             >> target/linux/ramips/image/mt7621.mk
 
-
-      # ==========================================================
-      # 10. Verify image profile
-      # ==========================================================
       - name: Verify image profile
         working-directory: source
         run: |
@@ -294,7 +237,7 @@ EOF
           echo "===== 360T6M IMAGE PROFILE ====="
 
           grep -n \
-            -A45 \
+            -A40 \
             -B3 \
             'define Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
@@ -306,15 +249,6 @@ EOF
             'SUPPORTED_DEVICES += 360,360t6m' \
             target/linux/ramips/image/mt7621.mk
 
-
-      # ==========================================================
-      # 11. Configure target and packages
-      #
-      # Important:
-      # We do NOT grep package Makefiles here.
-      # OpenWrt generates package definitions through macros.
-      # We verify the final .config after defconfig instead.
-      # ==========================================================
       - name: Configure 360T6M v2rayA
         working-directory: source
         run: |
@@ -345,7 +279,7 @@ EOF
           make defconfig
 
           echo
-          echo "===== FINAL TARGET CONFIG ====="
+          echo "===== TARGET CONFIG ====="
 
           grep -E \
             '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621' \
@@ -353,19 +287,13 @@ EOF
             || true
 
           echo
-          echo "===== FINAL TPROXY / V2RAYA CONFIG ====="
+          echo "===== V2RAYA / TPROXY CONFIG ====="
 
           grep -E \
             '^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' \
             .config \
             || true
 
-
-      # ==========================================================
-      # 12. HARD CHECK:
-      # all required package selections must remain enabled
-      # after defconfig
-      # ==========================================================
       - name: Verify required package selections
         working-directory: source
         run: |
@@ -392,13 +320,8 @@ EOF
             echo "OK: $cfg=y"
           done
 
-          echo
           echo "All required package selections are enabled."
 
-
-      # ==========================================================
-      # 13. Verify target profile
-      # ==========================================================
       - name: Verify 360T6M target
         working-directory: source
         run: |
@@ -413,10 +336,6 @@ EOF
             2>/dev/null \
             | head -100
 
-
-      # ==========================================================
-      # 14. Download sources
-      # ==========================================================
       - name: Download sources
         working-directory: source
         run: |
@@ -426,10 +345,6 @@ EOF
 
           make download -j2 V=s
 
-
-      # ==========================================================
-      # 15. Build firmware
-      # ==========================================================
       - name: Build firmware
         working-directory: source
         run: |
@@ -439,10 +354,6 @@ EOF
 
           make -j$(nproc) V=s
 
-
-      # ==========================================================
-      # 16. Show firmware files
-      # ==========================================================
       - name: Show firmware files
         working-directory: source
         run: |
@@ -456,10 +367,6 @@ EOF
             -printf '%p %k KB\n' \
             | sort
 
-
-      # ==========================================================
-      # 17. Verify firmware output
-      # ==========================================================
       - name: Verify firmware output
         working-directory: source
         run: |
@@ -496,10 +403,6 @@ EOF
             | sort \
             || true
 
-
-      # ==========================================================
-      # 18. Generate SHA256
-      # ==========================================================
       - name: Generate SHA256
         working-directory: source
         run: |
@@ -514,10 +417,6 @@ EOF
             | sort \
             | tee /tmp/360t6m-sha256.txt
 
-
-      # ==========================================================
-      # 19. Upload complete firmware
-      # ==========================================================
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
