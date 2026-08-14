@@ -51,7 +51,6 @@ jobs:
             swig \
             time
 
-          echo "===== TOOL VERSIONS ====="
           python3 --version
           gcc --version
           g++ --version
@@ -70,8 +69,6 @@ jobs:
             https://github.com/immortalwrt/immortalwrt.git \
             source
 
-          echo "===== IMMORTALWRT SOURCE ====="
-
           cd source
 
           git log -1 --oneline
@@ -80,8 +77,6 @@ jobs:
       - name: Copy 360T6M DTS
         run: |
           set -eux
-
-          echo "===== CHECK REPOSITORY DTS ====="
 
           test -f target/linux/ramips/dts/mt7621_360_t6m.dts
 
@@ -111,92 +106,88 @@ jobs:
 
           cat >> target/linux/ramips/image/mt7621.mk <<'EOF'
 
-define Device/360_t6m
-  $(Device/dsa-migration)
-  $(Device/uimage-lzma-loader)
+          define Device/360_t6m
+            $(Device/dsa-migration)
+            $(Device/uimage-lzma-loader)
 
-  DEVICE_VENDOR := 360
-  DEVICE_MODEL := T6M
-  DEVICE_DTS := mt7621_360_t6m
+            DEVICE_VENDOR := 360
+            DEVICE_MODEL := T6M
+            DEVICE_DTS := mt7621_360_t6m
 
-  BLOCKSIZE := 128k
-  PAGESIZE := 2048
-  KERNEL_SIZE := 4096k
+            BLOCKSIZE := 128k
+            PAGESIZE := 2048
+            KERNEL_SIZE := 4096k
 
-  UBINIZE_OPTS := -E 5
+            UBINIZE_OPTS := -E 5
 
-  IMAGE_SIZE := 124928k
+            IMAGE_SIZE := 124928k
 
-  IMAGES += firmware.bin
+            IMAGES += firmware.bin
 
-  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
 
-  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size
+            IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size
 
-  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware uboot-envtools
-endef
+            DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware uboot-envtools
+          endef
 
-TARGET_DEVICES += 360_t6m
+          TARGET_DEVICES += 360_t6m
 
-EOF
+          EOF
 
-      - name: Verify 360T6M files
+      - name: Verify DTS
         working-directory: source
         run: |
           set -eux
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
 
-          echo "===== DTS ====="
-
           test -f "$DTS"
+
+          echo "===== DTS CHECK ====="
 
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
-
-          echo "===== NETWORK ====="
 
           grep -q 'label = "wan"' "$DTS"
           grep -q 'label = "lan1"' "$DTS"
           grep -q 'label = "lan2"' "$DTS"
           grep -q 'label = "lan3"' "$DTS"
 
-          echo "===== WIFI ====="
-
           grep -q 'compatible = "mediatek,mt76"' "$DTS"
           grep -q 'mediatek,mtd-eeprom' "$DTS"
-
-          echo "===== BUTTONS ====="
 
           grep -q 'KEY_WPS_BUTTON' "$DTS"
           grep -q 'KEY_RESTART' "$DTS"
 
-          echo "===== FLASH ====="
-
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
+          echo "===== DTS CONTENT ====="
+
+          sed -n '1,260p' "$DTS"
+
+      - name: Verify image profile
+        working-directory: source
+        run: |
+          set -eux
+
           echo "===== IMAGE PROFILE ====="
 
-          grep -q 'define Device/360_t6m' \
+          grep -n -A35 -B3 \
+            'define Device/360_t6m' \
             target/linux/ramips/image/mt7621.mk
-
-          echo "360T6M source verification successful."
 
       - name: Configure MT7621
         working-directory: source
         run: |
           set -eux
 
-          echo "===== CREATE TARGET CONFIG ====="
-
           cat > .config <<'EOF'
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7621=y
-CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
-EOF
-
-          echo "===== RUN DEFCONFIG ====="
+          CONFIG_TARGET_ramips=y
+          CONFIG_TARGET_ramips_mt7621=y
+          CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
+          EOF
 
           make defconfig
 
@@ -221,21 +212,10 @@ EOF
             2>/dev/null \
             | head -100
 
-      - name: Prepare kernel configuration
-        working-directory: source
-        run: |
-          set -eux
-
-          echo "===== PREPARE LINUX ====="
-
-          make target/linux/prepare V=s
-
       - name: Download sources
         working-directory: source
         run: |
           set -eux
-
-          echo "===== DOWNLOAD SOURCES ====="
 
           make download -j2 V=s
 
@@ -278,6 +258,7 @@ EOF
               -name '*.bin' \
               -o -name '*.img' \
               -o -name '*.tar' \
+              -o -name '*.manifest' \
             \) \
             -print \
             | sort
