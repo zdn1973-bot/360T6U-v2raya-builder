@@ -144,22 +144,41 @@ jobs:
 
           echo "DTS verification successful."
 
-      - name: Check DTS syntax
+            - name: Check DTS syntax
         working-directory: source
         run: |
           set -e
 
+          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
+
+          echo "===== DTS PREPROCESS ====="
+
+          cpp \
+            -nostdinc \
+            -undef \
+            -x assembler-with-cpp \
+            -I target/linux/ramips/dts \
+            -I include \
+            -o /tmp/360t6m-preprocessed.dts \
+            "$DTS"
+
+          test -s /tmp/360t6m-preprocessed.dts
+
+          echo "===== DTC CHECK ====="
+
           dtc \
             -I dts \
             -O dtb \
-            -i target/linux/ramips/dts \
             -o /tmp/360t6m.dtb \
-            target/linux/ramips/dts/mt7621_360_t6m.dts
+            /tmp/360t6m-preprocessed.dts
 
           test -s /tmp/360t6m.dtb
 
           echo "DTS compilation successful."
 
+          ls -lh \
+            /tmp/360t6m-preprocessed.dts \
+            /tmp/360t6m.dtb
       - name: Configure target
         working-directory: source
         run: |
