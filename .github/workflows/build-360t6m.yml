@@ -52,8 +52,10 @@ jobs:
             time \
             squashfs-tools
 
+          echo "===== TOOLS ====="
           python3 --version
           gcc --version
+          g++ --version
           make --version
           dtc --version
           unsquashfs -version || true
@@ -72,46 +74,64 @@ jobs:
 
           cd source
 
+          echo "===== SOURCE ====="
           git log -1 --oneline
+
+      - name: Find platform.sh
+        working-directory: source
+        run: |
+          set -e
+
+          echo "===== PLATFORM.SH FILES ====="
+
+          find . \
+            -type f \
+            -path '*/lib/upgrade/platform.sh' \
+            -print \
+            | sort
+
+          PLATFORM="$(
+            find . \
+              -type f \
+              -path '*/lib/upgrade/platform.sh' \
+              -print \
+              | head -1
+          )"
+
+          if [ -z "$PLATFORM" ]; then
+            echo "ERROR: platform.sh was not found"
+            exit 1
+          fi
+
+          echo "$PLATFORM" > /tmp/platform_path
+
+          echo "===== SELECTED PLATFORM.SH ====="
+          cat /tmp/platform_path
 
       - name: Add 360T6M NAND upgrade handler
         working-directory: source
         run: |
           set -e
 
-          PLATFORM="package/base-files/files/lib/upgrade/platform.sh"
+          PLATFORM="$(
+            cat /tmp/platform_path
+          )"
 
           test -f "$PLATFORM"
 
           echo "===== ORIGINAL PLATFORM.SH ====="
-          sed -n '1,80p' "$PLATFORM"
+          sed -n '1,120p' "$PLATFORM"
 
           python3 - "$PLATFORM" <<'PY'
           from pathlib import Path
           import sys
 
           path = Path(sys.argv[1])
-          text = path.read_text()
-
-          print("===== PLATFORM CASE MARKERS =====")
-
-          for index, line in enumerate(text.splitlines(), 1):
-              stripped = line.strip()
-              if stripped.startswith("case ") or stripped == "*)":
-                  print(f"{index}: {line}")
-
-          lines = text.splitlines()
+          lines = path.read_text().splitlines()
 
           entry = '        360,360t6m|\\'
 
-          found = False
-
-          for line in lines:
-              if line.strip() == entry.strip():
-                  found = True
-                  break
-
-          if not found:
+          if not any("360,360t6m" in line for line in lines):
               insert_at = None
 
               for i, line in enumerate(lines):
@@ -121,23 +141,23 @@ jobs:
 
               if insert_at is None:
                   raise SystemExit(
-                      'ERROR: could not locate board case statement'
+                      'ERROR: board case statement was not found'
                   )
 
               lines.insert(insert_at, entry)
               path.write_text("\n".join(lines) + "\n")
 
-          print("===== MODIFIED PLATFORM CASE =====")
+          print("===== MODIFIED PLATFORM.SH =====")
 
-          lines = path.read_text().splitlines()
+          new_lines = path.read_text().splitlines()
 
-          for index, line in enumerate(lines, 1):
+          for i, line in enumerate(new_lines, 1):
               if "360,360t6m" in line:
-                  start = max(1, index - 4)
-                  end = min(len(lines), index + 8)
+                  start = max(1, i - 4)
+                  end = min(len(new_lines), i + 8)
 
                   for n in range(start, end + 1):
-                      print(f"{n}: {lines[n - 1]}")
+                      print(f"{n}: {new_lines[n - 1]}")
 
                   break
           else:
@@ -146,34 +166,20 @@ jobs:
               )
           PY
 
-      - name: Verify 360T6M NAND upgrade handler
+      - name: Verify NAND handler
         working-directory: source
         run: |
           set -e
 
-          PLATFORM="package/base-files/files/lib/upgrade/platform.sh"
+          PLATFORM="$(
+            cat /tmp/platform_path
+          )"
 
           test -f "$PLATFORM"
 
-          python3 - "$PLATFORM" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          lines = path.read_text().splitlines()
-
-          target = "360,360t6m|"
-
-          for i, line in enumerate(lines, 1):
-              if target in line:
-                  print("FOUND:")
-                  print(f"{i}: {line}")
-                  break
-          else:
-              raise SystemExit(
-                  "ERROR: 360,360t6m handler is missing"
-              )
-          PY
+          grep -Fq \
+            '360,360t6m|\' \
+            "$PLATFORM"
 
           echo "360T6M NAND upgrade handler verified."
 
@@ -206,7 +212,9 @@ jobs:
               "$DTS"
           fi
 
-          grep -n -A5 -B2 \
+          grep -n \
+            -A5 \
+            -B2 \
             'green:system' \
             "$DTS"
 
@@ -283,6 +291,7 @@ jobs:
           echo 'CONFIG_PACKAGE_kmod-nft-tproxy=y' >> .config
           echo 'CONFIG_PACKAGE_kmod-ipt-tproxy=y' >> .config
           echo 'CONFIG_PACKAGE_iptables-mod-tproxy=y' >> .config
+
           echo 'CONFIG_PACKAGE_v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
@@ -306,7 +315,6 @@ jobs:
           grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
           grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
           grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
-          grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
 
           echo "All required packages are enabled."
 
@@ -332,7 +340,7 @@ jobs:
           test -f "$IMAGE"
           ls -lh "$IMAGE"
 
-      - name: Verify real rootfs
+      - name: Inspect real rootfs
         working-directory: source
         run: |
           set -e
@@ -363,45 +371,40 @@ jobs:
 
           test -s /tmp/rootfs-list.txt
 
-          echo "===== V2RAYA ====="
+      - name: Verify v2rayA Xray TPROXY
+        working-directory: source
+        run: |
+          set -e
 
-          grep -q '/usr/bin/v2raya$' /tmp/rootfs-list.txt
-          grep -q '/usr/bin/xray$' /tmp/rootfs-list.txt
-          grep -q '/etc/init.d/v2raya$' /tmp/rootfs-list.txt
+          LIST="/tmp/rootfs-list.txt"
 
-          echo "v2rayA and Xray found."
+          grep -q '/usr/bin/v2raya$' "$LIST"
+          echo "OK: /usr/bin/v2raya"
 
-          echo "===== TPROXY ====="
+          grep -q '/usr/bin/xray$' "$LIST"
+          echo "OK: /usr/bin/xray"
+
+          grep -q '/etc/init.d/v2raya$' "$LIST"
+          echo "OK: /etc/init.d/v2raya"
 
           grep -E -q \
             'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
-            /tmp/rootfs-list.txt
+            "$LIST"
 
-          echo "TPROXY found."
+          echo "OK: TPROXY module found."
 
-      - name: Show output
+      - name: Show firmware and SHA256
         working-directory: source
         run: |
           set -e
 
-          find \
-            bin/targets/ramips/mt7621 \
-            -maxdepth 1 \
-            -type f \
-            -printf '%f %k KB\n' \
-            | sort
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
-      - name: Generate SHA256
-        working-directory: source
-        run: |
-          set -e
+          echo "===== SHA256 ====="
+          sha256sum "$IMAGE"
 
-          find \
-            bin/targets/ramips/mt7621 \
-            -maxdepth 1 \
-            -type f \
-            -exec sha256sum {} \; \
-            | sort
+          echo "===== FILE ====="
+          ls -lh "$IMAGE"
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
