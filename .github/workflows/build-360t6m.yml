@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 360T6M v2rayA
+name: Build ImmortalWrt 360T6M v2raya
 
 on:
   workflow_dispatch:
@@ -8,365 +8,235 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M v2rayA
     runs-on: ubuntu-24.04
 
     steps:
 
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
           set -e
-
           sudo apt-get update
-
-          sudo apt-get install -y \
-            build-essential \
-            clang \
-            flex \
-            bison \
-            g++ \
-            gawk \
-            gcc-multilib \
-            gettext \
-            git \
-            libncurses-dev \
-            libssl-dev \
-            python3 \
-            python3-dev \
-            python3-pip \
-            python3-setuptools \
-            rsync \
-            unzip \
-            zlib1g-dev \
-            file \
-            wget \
-            curl \
-            device-tree-compiler \
-            ccache \
-            libelf-dev \
-            libxml-parser-perl \
-            swig \
-            time \
-            squashfs-tools
-
-          echo "===== TOOL VERSIONS ====="
-          python3 --version
-          gcc --version
-          make --version
-          dtc --version
-          unsquashfs -version
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib gettext git libncurses-dev libssl-dev python3 python3-dev python3-pip python3-setuptools rsync unzip zlib1g-dev file wget curl device-tree-compiler ccache libelf-dev libxml-parser-perl swig time squashfs-tools
 
       - name: Clone ImmortalWrt
         run: |
           set -e
-
           rm -rf source
-
-          git clone \
-            --depth=1 \
-            --branch=openwrt-23.05 \
-            https://github.com/immortalwrt/immortalwrt.git \
-            source
-
+          git clone --depth=1 --branch=openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git source
           cd source
-
-          echo "===== IMMORTALWRT SOURCE ====="
           git log -1 --oneline
-          git branch --show-current
 
-      - name: Copy 360T6M DTS
+      - name: Copy DTS
         run: |
           set -e
-
           test -f target/linux/ramips/dts/mt7621_360_t6m.dts
-
           mkdir -p source/target/linux/ramips/dts
+          cp target/linux/ramips/dts/mt7621_360_t6m.dts source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          cp \
-            target/linux/ramips/dts/mt7621_360_t6m.dts \
-            source/target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          echo "===== DTS COPIED ====="
-          ls -lh source/target/linux/ramips/dts/mt7621_360_t6m.dts
-
-      - name: Fix 360T6M green LED
+      - name: Fix green LED
         working-directory: source
         run: |
           set -e
-
-          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
-
-          test -f "$DTS"
-
-          sed -i \
-            's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' \
-            "$DTS"
-
+          DTS=target/linux/ramips/dts/mt7621_360_t6m.dts
+          sed -i 's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' "$DTS"
           if ! grep -q 'default-state = "on";' "$DTS"; then
-            sed -i \
-              '/label = "green:system";/a\		default-state = "on";' \
-              "$DTS"
+            sed -i '/label = "green:system";/a\		default-state = "on";' "$DTS"
           fi
-
-          echo "===== GREEN LED ====="
           grep -n -A5 -B2 'green:system' "$DTS"
 
       - name: Update feeds
         working-directory: source
         run: |
           set -e
-
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Add 360T6M device profile
+      - name: Add 360T6M device
         working-directory: source
         run: |
           set -e
+          IMAGE=target/linux/ramips/image/mt7621.mk
 
-          IMAGE="target/linux/ramips/image/mt7621.mk"
-
-          echo 'define Device/360_t6m' >> "$IMAGE"
-          echo '  $(Device/dsa-migration)' >> "$IMAGE"
-          echo '  $(Device/uimage-lzma-loader)' >> "$IMAGE"
-          echo '  DEVICE_VENDOR := 360' >> "$IMAGE"
-          echo '  DEVICE_MODEL := T6M' >> "$IMAGE"
-          echo '  DEVICE_DTS := mt7621_360_t6m' >> "$IMAGE"
-          echo '  SUPPORTED_DEVICES += 360,360t6m' >> "$IMAGE"
-          echo '  BLOCKSIZE := 128k' >> "$IMAGE"
-          echo '  PAGESIZE := 2048' >> "$IMAGE"
-          echo '  KERNEL_SIZE := 4096k' >> "$IMAGE"
-          echo '  UBINIZE_OPTS := -E 5' >> "$IMAGE"
-          echo '  IMAGE_SIZE := 124928k' >> "$IMAGE"
-          echo '  IMAGES += firmware.bin' >> "$IMAGE"
-          echo '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' >> "$IMAGE"
-          echo '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' >> "$IMAGE"
-          echo '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' >> "$IMAGE"
-          echo 'endef' >> "$IMAGE"
-          echo 'TARGET_DEVICES += 360_t6m' >> "$IMAGE"
-
-          echo "===== 360T6M PROFILE ====="
-
-          grep -n \
-            -A35 \
+          printf '%s\n' \
             'define Device/360_t6m' \
-            "$IMAGE"
+            '  $(Device/dsa-migration)' \
+            '  $(Device/uimage-lzma-loader)' \
+            '  DEVICE_VENDOR := 360' \
+            '  DEVICE_MODEL := T6M' \
+            '  DEVICE_DTS := mt7621_360_t6m' \
+            '  SUPPORTED_DEVICES += 360,360t6m' \
+            '  BLOCKSIZE := 128k' \
+            '  PAGESIZE := 2048' \
+            '  KERNEL_SIZE := 4096k' \
+            '  UBINIZE_OPTS := -E 5' \
+            '  IMAGE_SIZE := 124928k' \
+            '  IMAGES += firmware.bin' \
+            '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \
+            '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \
+            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' \
+            'endef' \
+            'TARGET_DEVICES += 360_t6m' \
+            >> "$IMAGE"
+
+          grep -n -A30 'define Device/360_t6m' "$IMAGE"
 
       - name: Verify DTS
         working-directory: source
         run: |
           set -e
-
-          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
-
-          test -f "$DTS"
+          DTS=target/linux/ramips/dts/mt7621_360_t6m.dts
 
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
-
           grep -q 'label = "wan"' "$DTS"
           grep -q 'label = "lan1"' "$DTS"
           grep -q 'label = "lan2"' "$DTS"
           grep -q 'label = "lan3"' "$DTS"
-
           grep -q 'compatible = "mediatek,mt76"' "$DTS"
           grep -q 'mediatek,mtd-eeprom' "$DTS"
-
           grep -q 'GPIO_ACTIVE_LOW' "$DTS"
           grep -q 'default-state = "on"' "$DTS"
-
           grep -q 'KEY_WPS_BUTTON' "$DTS"
           grep -q 'KEY_RESTART' "$DTS"
-
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
           echo "DTS verification successful."
 
-      - name: Configure target and packages
+      - name: Configure target
         working-directory: source
         run: |
           set -e
 
-          cat > .config <<'EOF'
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7621=y
-CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y
+          echo 'CONFIG_TARGET_ramips=y' > .config
+          echo 'CONFIG_TARGET_ramips_mt7621=y' >> .config
+          echo 'CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y' >> .config
 
-CONFIG_PACKAGE_kmod-nf-tproxy=y
-CONFIG_PACKAGE_kmod-nft-tproxy=y
-CONFIG_PACKAGE_kmod-ipt-tproxy=y
-CONFIG_PACKAGE_iptables-mod-tproxy=y
+          echo 'CONFIG_PACKAGE_kmod-nf-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-nft-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-ipt-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_iptables-mod-tproxy=y' >> .config
 
-CONFIG_PACKAGE_v2raya=y
-CONFIG_PACKAGE_luci-app-v2raya=y
-CONFIG_PACKAGE_xray-core=y
+          echo 'CONFIG_PACKAGE_v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
 
-CONFIG_PACKAGE_kmod-tun=y
-
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_ca-bundle=y
-CONFIG_PACKAGE_ca-certificates=y
-EOF
-
-          echo "===== MAKE DEFCONFIG ====="
+          echo 'CONFIG_PACKAGE_curl=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
 
           make defconfig
 
-          echo
           echo "===== FINAL CONFIG ====="
+          grep -E '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|kmod-ipt-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' .config || true
 
-          grep -E \
-            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|kmod-ipt-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' \
-            .config \
-            || true
-
-      - name: Verify selected packages
+      - name: Verify package selections
         working-directory: source
         run: |
           set -e
 
-          echo "===== VERIFY PACKAGE SELECTION ====="
-
-          grep -q '^CONFIG_TARGET_ramips=y$' .config
-          grep -q '^CONFIG_TARGET_ramips_mt7621=y$' .config
           grep -q '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' .config
-
           grep -q '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' .config
           grep -q '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
           grep -q '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' .config
           grep -q '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' .config
-
           grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
           grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
           grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
-
           grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
 
-          echo "All required packages remain enabled after defconfig."
+          echo "All required package selections are enabled."
 
       - name: Download sources
         working-directory: source
         run: |
           set -e
-
-          echo "===== DOWNLOAD ====="
-
           make download -j2 V=s
 
-      - name: Build firmware
+      - name: Build
         working-directory: source
         run: |
           set -e
-
-          echo "===== START BUILD ====="
-
           make -j$(nproc) V=s
 
-      - name: Verify firmware output
+      - name: Verify firmware
         working-directory: source
         run: |
           set -e
 
-          OUT="bin/targets/ramips/mt7621"
-
-          test -d "$OUT"
-
+          OUT=bin/targets/ramips/mt7621
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
           test -f "$IMAGE"
 
-          echo "===== IMAGE ====="
+          echo "===== FIRMWARE ====="
           ls -lh "$IMAGE"
 
-      - name: Inspect sysupgrade image
+      - name: Inspect sysupgrade rootfs
         working-directory: source
         run: |
           set -e
 
-          OUT="bin/targets/ramips/mt7621"
+          OUT=bin/targets/ramips/mt7621
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
-          rm -rf /tmp/sysupgrade-check
-          mkdir -p /tmp/sysupgrade-check
+          rm -rf /tmp/image-check
+          mkdir -p /tmp/image-check
+
+          tar -xf "$IMAGE" -C /tmp/image-check
 
           echo "===== SYSUPGRADE CONTENT ====="
+          find /tmp/image-check -maxdepth 2 -type f -print | sort
 
-          tar -tf "$IMAGE"
-
-          echo
-          echo "===== EXTRACT SYSUPGRADE ====="
-
-          tar -xf "$IMAGE" -C /tmp/sysupgrade-check
-
-          find /tmp/sysupgrade-check \
-            -maxdepth 2 \
-            -type f \
-            -printf '%p %s bytes\n' \
-            | sort
-
-      - name: Verify real root filesystem
-        working-directory: source
-        run: |
-          set -e
-
-          ROOT_IMAGE=""
-
-          for f in \
-            /tmp/sysupgrade-check/root \
-            /tmp/sysupgrade-check/root.squashfs \
-            /tmp/sysupgrade-check/*root*.squashfs
-          do
+          ROOT=""
+          for f in /tmp/image-check/root /tmp/image-check/root.squashfs; do
             if [ -f "$f" ]; then
-              ROOT_IMAGE="$f"
+              ROOT="$f"
               break
             fi
           done
 
-          if [ -z "$ROOT_IMAGE" ]; then
-            echo "ERROR: root squashfs image was not found"
-            exit 1
+          if [ -z "$ROOT" ]; then
+            ROOT=$(find /tmp/image-check -type f -name '*.squashfs' | head -1)
           fi
 
+          test -n "$ROOT"
+          test -f "$ROOT"
+
           echo "===== ROOT IMAGE ====="
-          echo "$ROOT_IMAGE"
-          ls -lh "$ROOT_IMAGE"
+          echo "$ROOT"
+          ls -lh "$ROOT"
 
           rm -rf /tmp/rootfs-check
           mkdir -p /tmp/rootfs-check
 
-          unsquashfs \
-            -d /tmp/rootfs-check \
-            "$ROOT_IMAGE"
+          unsquashfs -d /tmp/rootfs-check "$ROOT"
 
-          echo "===== CHECK V2RAYA ====="
+      - name: Verify v2rayA in real rootfs
+        working-directory: source
+        run: |
+          set -e
 
           test -f /tmp/rootfs-check/usr/bin/v2raya
-
-          echo "OK: /usr/bin/v2raya"
-
-          echo
-          echo "===== CHECK XRAY ====="
-
           test -f /tmp/rootfs-check/usr/bin/xray
-
-          echo "OK: /usr/bin/xray"
-
-          echo
-          echo "===== CHECK V2RAYA INIT ====="
-
           test -f /tmp/rootfs-check/etc/init.d/v2raya
 
-          echo "OK: /etc/init.d/v2raya"
+          echo "v2rayA binary found."
+          echo "Xray binary found."
+          echo "v2rayA init script found."
 
-          echo
-          echo "===== CHECK TPROXY MODULES ====="
+      - name: Verify TPROXY in real rootfs
+        working-directory: source
+        run: |
+          set -e
 
-          find \
-            /tmp/rootfs-check/lib/modules \
+          echo "===== TPROXY MODULES ====="
+
+          find /tmp/rootfs-check/lib/modules \
             -type f \
             \( \
               -name '*nf*tproxy*.ko' \
@@ -376,113 +246,36 @@ EOF
             -print \
             | sort
 
-          NF_COUNT="$(
-            find \
-              /tmp/rootfs-check/lib/modules \
-              -type f \
-              -name '*nf*tproxy*.ko' \
-              | wc -l
-          )"
+          test "$(find /tmp/rootfs-check/lib/modules -type f -name '*nf*tproxy*.ko' | wc -l)" -gt 0
+          test "$(find /tmp/rootfs-check/lib/modules -type f -name '*nft*tproxy*.ko' | wc -l)" -gt 0
+          test "$(find /tmp/rootfs-check/lib/modules -type f -name '*ipt*tproxy*.ko' | wc -l)" -gt 0
 
-          NFT_COUNT="$(
-            find \
-              /tmp/rootfs-check/lib/modules \
-              -type f \
-              -name '*nft*tproxy*.ko' \
-              | wc -l
-          )"
+          echo "All required TPROXY modules are inside the real rootfs."
 
-          IPT_COUNT="$(
-            find \
-              /tmp/rootfs-check/lib/modules \
-              -type f \
-              -name '*ipt*tproxy*.ko' \
-              | wc -l
-          )"
-
-          if [ "$NF_COUNT" -eq 0 ]; then
-            echo "ERROR: NF TPROXY kernel module is missing from rootfs"
-            exit 1
-          fi
-
-          if [ "$NFT_COUNT" -eq 0 ]; then
-            echo "ERROR: NFT TPROXY kernel module is missing from rootfs"
-            exit 1
-          fi
-
-          if [ "$IPT_COUNT" -eq 0 ]; then
-            echo "ERROR: IPT TPROXY kernel module is missing from rootfs"
-            exit 1
-          fi
-
-          echo "All TPROXY modules are present in the actual rootfs."
-
-      - name: Verify installed package database
+      - name: Verify package database
         working-directory: source
         run: |
           set -e
 
-          echo "===== PACKAGE DATABASE ====="
+          STATUS=/tmp/rootfs-check/usr/lib/opkg/status
 
-          test -f /tmp/rootfs-check/usr/lib/opkg/status
+          test -f "$STATUS"
 
-          grep -q \
-            '^Package: v2raya$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
+          grep -q '^Package: v2raya$' "$STATUS"
+          grep -q '^Package: luci-app-v2raya$' "$STATUS"
+          grep -q '^Package: xray-core$' "$STATUS"
+          grep -q '^Package: kmod-nf-tproxy$' "$STATUS"
+          grep -q '^Package: kmod-nft-tproxy$' "$STATUS"
+          grep -q '^Package: kmod-ipt-tproxy$' "$STATUS"
 
-          grep -q \
-            '^Package: luci-app-v2raya$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
-
-          grep -q \
-            '^Package: xray-core$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
-
-          grep -q \
-            '^Package: kmod-nf-tproxy$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
-
-          grep -q \
-            '^Package: kmod-nft-tproxy$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
-
-          grep -q \
-            '^Package: kmod-ipt-tproxy$' \
-            /tmp/rootfs-check/usr/lib/opkg/status
-
-          echo "Required packages are recorded in the actual rootfs package database."
-
-      - name: Verify device support metadata
-        working-directory: source
-        run: |
-          set -e
-
-          OUT="bin/targets/ramips/mt7621"
-          MANIFEST="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.manifest"
-
-          if [ -f "$MANIFEST" ]; then
-            echo "===== MANIFEST ====="
-            cat "$MANIFEST"
-          fi
-
-          echo "===== DEVICE ====="
-
-          grep -R \
-            '360,360t6m' \
-            "$OUT" \
-            2>/dev/null \
-            | head -20 \
-            || true
+          echo "Required packages are recorded in the rootfs."
 
       - name: Show generated files
         working-directory: source
         run: |
           set -e
 
-          echo "===== GENERATED FILES ====="
-
-          find \
-            bin/targets/ramips/mt7621 \
+          find bin/targets/ramips/mt7621 \
             -maxdepth 1 \
             -type f \
             -printf '%f %k KB\n' \
@@ -493,10 +286,7 @@ EOF
         run: |
           set -e
 
-          echo "===== SHA256 ====="
-
-          find \
-            bin/targets/ramips/mt7621 \
+          find bin/targets/ramips/mt7621 \
             -maxdepth 1 \
             -type f \
             -exec sha256sum {} \; \
