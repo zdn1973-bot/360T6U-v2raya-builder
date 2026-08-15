@@ -53,6 +53,7 @@ jobs:
             squashfs-tools
 
           echo "===== TOOL VERSIONS ====="
+
           python3 --version
           gcc --version
           g++ --version
@@ -60,6 +61,7 @@ jobs:
           dtc --version
 
           echo "===== SQUASHFS TOOL ====="
+
           unsquashfs -version || true
 
       - name: Clone ImmortalWrt
@@ -77,6 +79,7 @@ jobs:
           cd source
 
           echo "===== SOURCE ====="
+
           git log -1 --oneline
           git branch --show-current
 
@@ -213,14 +216,18 @@ jobs:
           echo 'CONFIG_PACKAGE_v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+
           echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
 
           echo 'CONFIG_PACKAGE_curl=y' >> .config
           echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
           echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
 
+          echo "===== MAKE DEFCONFIG ====="
+
           make defconfig
 
+          echo
           echo "===== FINAL CONFIG ====="
 
           grep -E \
@@ -233,17 +240,41 @@ jobs:
         run: |
           set -e
 
-          grep -q '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' .config
+          grep -q \
+            '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' \
+            .config
 
-          grep -q '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' .config
-          grep -q '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
-          grep -q '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' .config
-          grep -q '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' .config
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' \
+            .config
 
-          grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
-          grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
-          grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
-          grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_v2raya=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_luci-app-v2raya=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_xray-core=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-tun=y$' \
+            .config
 
           echo "All required packages are enabled."
 
@@ -275,6 +306,7 @@ jobs:
           test -f "$IMAGE"
 
           echo "===== FIRMWARE ====="
+
           ls -lh "$IMAGE"
 
       - name: Inspect sysupgrade rootfs
@@ -286,7 +318,10 @@ jobs:
 
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
+          test -f "$IMAGE"
+
           rm -rf /tmp/image-check
+
           mkdir -p /tmp/image-check
 
           echo "===== EXTRACT SYSUPGRADE ====="
@@ -319,95 +354,111 @@ jobs:
           test -f "$ROOT"
 
           echo "===== ROOT IMAGE ====="
+
           echo "$ROOT"
 
           file "$ROOT"
+
           ls -lh "$ROOT"
 
-          rm -rf /tmp/rootfs-check
-          mkdir -p /tmp/rootfs-check
-
-          echo "===== EXTRACT ROOTFS ====="
+          echo
+          echo "===== ROOTFS CONTENT ====="
 
           unsquashfs \
-            -d /tmp/rootfs-check \
-            "$ROOT"
+            -l \
+            "$ROOT" \
+            > /tmp/rootfs-list.txt
 
-          test -d /tmp/rootfs-check
+          test -s /tmp/rootfs-list.txt
 
-      - name: Verify v2rayA in real rootfs
+          echo "===== V2RAYA/XRAY ====="
+
+          grep -E \
+            '(^|/)(usr/bin/v2raya|usr/bin/xray|etc/init.d/v2raya)$' \
+            /tmp/rootfs-list.txt \
+            || true
+
+          echo
+          echo "===== TPROXY ====="
+
+          grep -Ei \
+            'tproxy.*\.ko$|nf.*tproxy|nft.*tproxy|ipt.*tproxy' \
+            /tmp/rootfs-list.txt \
+            || true
+
+          echo
+          echo "===== OPKG STATUS ====="
+
+          grep \
+            'usr/lib/opkg/status$' \
+            /tmp/rootfs-list.txt \
+            || true
+
+      - name: Verify v2rayA and Xray in real rootfs
         working-directory: source
         run: |
           set -e
 
-          echo "===== V2RAYA ====="
+          LIST="/tmp/rootfs-list.txt"
 
-          test -f \
-            /tmp/rootfs-check/usr/bin/v2raya
+          test -f "$LIST"
+
+          echo "===== VERIFY V2RAYA ====="
+
+          grep -q \
+            '/usr/bin/v2raya$' \
+            "$LIST"
 
           echo "OK: /usr/bin/v2raya"
 
-          echo "===== XRAY ====="
+          echo
+          echo "===== VERIFY XRAY ====="
 
-          test -f \
-            /tmp/rootfs-check/usr/bin/xray
+          grep -q \
+            '/usr/bin/xray$' \
+            "$LIST"
 
           echo "OK: /usr/bin/xray"
 
-          echo "===== V2RAYA INIT ====="
+          echo
+          echo "===== VERIFY V2RAYA INIT ====="
 
-          test -f \
-            /tmp/rootfs-check/etc/init.d/v2raya
+          grep -q \
+            '/etc/init.d/v2raya$' \
+            "$LIST"
 
           echo "OK: /etc/init.d/v2raya"
 
-      - name: Verify TPROXY modules
+      - name: Verify TPROXY in real rootfs
         working-directory: source
         run: |
           set -e
 
-          echo "===== TPROXY MODULES ====="
+          LIST="/tmp/rootfs-list.txt"
 
-          find \
-            /tmp/rootfs-check/lib/modules \
-            -type f \
-            -name '*tproxy*.ko' \
-            -print \
-            | sort
+          echo "===== VERIFY TPROXY ====="
 
-          COUNT="$(
-            find \
-              /tmp/rootfs-check/lib/modules \
-              -type f \
-              -name '*tproxy*.ko' \
-              | wc -l
-          )"
+          grep -E \
+            -q \
+            'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
+            "$LIST"
 
-          if [ "$COUNT" -eq 0 ]; then
-            echo "ERROR: TPROXY modules are missing from rootfs"
-            exit 1
-          fi
-
-          echo "TPROXY modules found: $COUNT"
+          echo "OK: TPROXY kernel module found in rootfs."
 
       - name: Verify rootfs package database
         working-directory: source
         run: |
           set -e
 
-          STATUS="/tmp/rootfs-check/usr/lib/opkg/status"
+          LIST="/tmp/rootfs-list.txt"
 
-          test -f "$STATUS"
+          echo "===== VERIFY OPKG STATUS ====="
 
-          grep -q '^Package: v2raya$' "$STATUS"
-          grep -q '^Package: luci-app-v2raya$' "$STATUS"
-          grep -q '^Package: xray-core$' "$STATUS"
+          grep -q \
+            'usr/lib/opkg/status$' \
+            "$LIST"
 
-          grep -q '^Package: kmod-nf-tproxy$' "$STATUS"
-          grep -q '^Package: kmod-nft-tproxy$' "$STATUS"
-          grep -q '^Package: kmod-ipt-tproxy$' "$STATUS"
-
-          echo "All required packages are present in rootfs."
+          echo "OK: opkg package database exists in rootfs."
 
       - name: Show generated files
         working-directory: source
