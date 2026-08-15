@@ -176,46 +176,78 @@ jobs:
           echo "===== FIRMWARE ====="
           ls -lh "$IMAGE"
 
-      - name: Inspect sysupgrade rootfs
+            - name: Inspect sysupgrade rootfs
         working-directory: source
         run: |
           set -e
 
-          OUT=bin/targets/ramips/mt7621
+          OUT="bin/targets/ramips/mt7621"
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          test -f "$IMAGE"
 
           rm -rf /tmp/image-check
           mkdir -p /tmp/image-check
 
+          echo "===== EXTRACT SYSUPGRADE ====="
+
           tar -xf "$IMAGE" -C /tmp/image-check
 
           echo "===== SYSUPGRADE CONTENT ====="
-          find /tmp/image-check -maxdepth 2 -type f -print | sort
 
-          ROOT=""
-          for f in /tmp/image-check/root /tmp/image-check/root.squashfs; do
-            if [ -f "$f" ]; then
-              ROOT="$f"
-              break
-            fi
-          done
+          find /tmp/image-check \
+            -maxdepth 3 \
+            -type f \
+            -print \
+            | sort
+
+          echo
+          echo "===== FIND ROOT IMAGE ====="
+
+          ROOT="$(
+            find /tmp/image-check \
+              -type f \
+              -name root \
+              -print \
+              -quit
+          )"
 
           if [ -z "$ROOT" ]; then
-            ROOT=$(find /tmp/image-check -type f -name '*.squashfs' | head -1)
+            echo "ERROR: root image was not found"
+            exit 1
           fi
 
-          test -n "$ROOT"
           test -f "$ROOT"
 
-          echo "===== ROOT IMAGE ====="
+          echo "ROOT IMAGE:"
           echo "$ROOT"
+
+          echo
+          echo "===== ROOT IMAGE TYPE ====="
+
+          file "$ROOT"
+
+          echo
+          echo "===== ROOT IMAGE SIZE ====="
+
           ls -lh "$ROOT"
 
           rm -rf /tmp/rootfs-check
           mkdir -p /tmp/rootfs-check
 
-          unsquashfs -d /tmp/rootfs-check "$ROOT"
+          echo
+          echo "===== UNSQUASH ROOTFS ====="
 
+          unsquashfs \
+            -d /tmp/rootfs-check \
+            "$ROOT"
+
+          echo
+          echo "===== ROOTFS EXTRACTED ====="
+
+          test -d /tmp/rootfs-check
+
+          ls -ld /tmp/rootfs-check
       - name: Verify v2rayA in real rootfs
         working-directory: source
         run: |
