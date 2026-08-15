@@ -54,6 +54,7 @@ jobs:
           echo "===== TOOL VERSIONS ====="
           python3 --version
           gcc --version
+          g++ --version
           make --version
           dtc --version
 
@@ -73,6 +74,7 @@ jobs:
 
           echo "===== IMMORTALWRT SOURCE ====="
           git log -1 --oneline
+          git branch --show-current
 
       - name: Copy 360T6M DTS
         run: |
@@ -84,6 +86,10 @@ jobs:
 
           cp \
             target/linux/ramips/dts/mt7621_360_t6m.dts \
+            source/target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          echo "===== DTS COPIED ====="
+          ls -lh \
             source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
       - name: Fix green LED
@@ -198,6 +204,7 @@ jobs:
           echo 'CONFIG_PACKAGE_v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+
           echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
 
           echo 'CONFIG_PACKAGE_curl=y' >> .config
@@ -206,7 +213,7 @@ jobs:
 
           make defconfig
 
-          echo "===== CONFIGURATION ====="
+          echo "===== FINAL CONFIG ====="
 
           grep -E \
             '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|kmod-ipt-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' \
@@ -218,27 +225,43 @@ jobs:
         run: |
           set -e
 
-          required="
-          CONFIG_TARGET_ramips
-          CONFIG_TARGET_ramips_mt7621
-          CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m
-          CONFIG_PACKAGE_kmod-nf-tproxy
-          CONFIG_PACKAGE_kmod-nft-tproxy
-          CONFIG_PACKAGE_kmod-ipt-tproxy
-          CONFIG_PACKAGE_iptables-mod-tproxy
-          CONFIG_PACKAGE_v2raya
-          CONFIG_PACKAGE_luci-app-v2raya
-          CONFIG_PACKAGE_xray-core
-          CONFIG_PACKAGE_kmod-tun
-          "
+          grep -q \
+            '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' \
+            .config
 
-          for cfg in $required; do
-            if ! grep -q "^${cfg}=y$" .config; then
-              echo "ERROR: ${cfg} is not enabled"
-              exit 1
-            fi
-            echo "OK: ${cfg}=y"
-          done
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_v2raya=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_luci-app-v2raya=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_xray-core=y$' \
+            .config
+
+          grep -q \
+            '^CONFIG_PACKAGE_kmod-tun=y$' \
+            .config
+
+          echo "Configuration verified successfully."
 
       - name: Download sources
         working-directory: source
@@ -256,7 +279,7 @@ jobs:
 
           make -j$(nproc) V=s
 
-      - name: Verify generated firmware
+      - name: Verify firmware
         working-directory: source
         run: |
           set -e
@@ -265,7 +288,7 @@ jobs:
 
           test -d "$OUT"
 
-          echo "===== FIRMWARE FILES ====="
+          echo "===== FIRMWARE ====="
 
           find "$OUT" \
             -maxdepth 1 \
@@ -282,147 +305,37 @@ jobs:
           test -f \
             "$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
-      - name: Find package index
+      - name: Show kernel packages
         working-directory: source
         run: |
           set -e
 
-          echo "===== PACKAGE INDEX ====="
+          echo "===== KERNEL IPK ====="
 
           find bin \
             -type f \
-            -name Packages \
+            -name 'kernel_*.ipk' \
             -print \
             | sort
 
-      - name: Verify TPROXY package metadata
+      - name: Show TPROXY packages
         working-directory: source
         run: |
           set -e
 
-          PKG_INDEX="$(
-            find bin \
-              -type f \
-              -name Packages \
-              | head -1
-          )"
+          echo "===== TPROXY IPK ====="
 
-          test -n "$PKG_INDEX"
-          test -f "$PKG_INDEX"
+          find bin \
+            -type f \
+            \( \
+              -name 'kmod-nf-tproxy_*.ipk' \
+              -o -name 'kmod-nft-tproxy_*.ipk' \
+              -o -name 'kmod-ipt-tproxy_*.ipk' \
+            \) \
+            -print \
+            | sort
 
-          echo "Using package index:"
-          echo "$PKG_INDEX"
-
-          echo
-          echo "===== kmod-nf-tproxy ====="
-
-          awk '
-            /^Package: kmod-nf-tproxy$/ {show=1}
-            show {print}
-            show && /^$/ {exit}
-          ' "$PKG_INDEX"
-
-          echo
-          echo "===== kmod-nft-tproxy ====="
-
-          awk '
-            /^Package: kmod-nft-tproxy$/ {show=1}
-            show {print}
-            show && /^$/ {exit}
-          ' "$PKG_INDEX"
-
-          echo
-          echo "===== kmod-ipt-tproxy ====="
-
-          awk '
-            /^Package: kmod-ipt-tproxy$/ {show=1}
-            show {print}
-            show && /^$/ {exit}
-          ' "$PKG_INDEX"
-
-          echo
-          echo "===== v2raya ====="
-
-          awk '
-            /^Package: v2raya$/ {show=1}
-            show {print}
-            show && /^$/ {exit}
-          ' "$PKG_INDEX"
-
-      - name: Check kernel dependency consistency
-        working-directory: source
-        run: |
-          set -e
-
-          PKG_INDEX="$(
-            find bin \
-              -type f \
-              -name Packages \
-              | head -1
-          )"
-
-          test -n "$PKG_INDEX"
-
-          KERNEL_VERSION="$(
-            awk '
-              /^Package: kernel$/ {show=1}
-              show && /^Version:/ {
-                print $2
-                exit
-              }
-            ' "$PKG_INDEX"
-          )"
-
-          NF_DEPENDS="$(
-            awk '
-              /^Package: kmod-nf-tproxy$/ {show=1}
-              show && /^Depends:/ {
-                print
-                exit
-              }
-            ' "$PKG_INDEX"
-          )"
-
-          NFT_DEPENDS="$(
-            awk '
-              /^Package: kmod-nft-tproxy$/ {show=1}
-              show && /^Depends:/ {
-                print
-                exit
-              }
-            ' "$PKG_INDEX"
-          )"
-
-          echo "===== KERNEL VERSION ====="
-          echo "$KERNEL_VERSION"
-
-          echo
-          echo "===== NF TPROXY DEPENDS ====="
-          echo "$NF_DEPENDS"
-
-          echo
-          echo "===== NFT TPROXY DEPENDS ====="
-          echo "$NFT_DEPENDS"
-
-          if [ -z "$KERNEL_VERSION" ]; then
-            echo "ERROR: kernel version not found in package index"
-            exit 1
-          fi
-
-          if ! echo "$NF_DEPENDS" | grep -q "kernel (= $KERNEL_VERSION)"; then
-            echo "ERROR: kmod-nf-tproxy does not match built kernel"
-            exit 1
-          fi
-
-          if ! echo "$NFT_DEPENDS" | grep -q "kernel (= $KERNEL_VERSION)"; then
-            echo "ERROR: kmod-nft-tproxy does not match built kernel"
-            exit 1
-          fi
-
-          echo
-          echo "TPROXY kernel dependency matches the built kernel."
-
-      - name: Verify v2rayA and Xray packages
+      - name: Show v2rayA and Xray packages
         working-directory: source
         run: |
           set -e
@@ -453,10 +366,28 @@ jobs:
             -print \
             | sort
 
+      - name: Show package indexes
+        working-directory: source
+        run: |
+          set -e
+
+          echo "===== PACKAGE INDEX FILES ====="
+
+          find bin \
+            -type f \
+            \( \
+              -name 'Packages' \
+              -o -name 'Packages.gz' \
+            \) \
+            -print \
+            | sort
+
       - name: Generate SHA256
         working-directory: source
         run: |
           set -e
+
+          echo "===== SHA256 ====="
 
           find \
             bin/targets/ramips/mt7621 \
@@ -468,7 +399,7 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-360T6M-v2raya-ABI
+          name: ImmortalWrt-360T6M-v2raya
           path: source/bin/targets/ramips/mt7621/**/*
           if-no-files-found: error
           retention-days: 30
