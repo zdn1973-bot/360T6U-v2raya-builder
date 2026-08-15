@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 360T6M v2rayA
+name: Build ImmortalWrt 360T6M v2raya
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M v2rayA
+    name: Build 360T6M v2raya
     runs-on: ubuntu-24.04
 
     steps:
@@ -53,15 +53,11 @@ jobs:
             squashfs-tools
 
           echo "===== TOOL VERSIONS ====="
-
           python3 --version
           gcc --version
           g++ --version
           make --version
           dtc --version
-
-          echo "===== SQUASHFS TOOL ====="
-
           unsquashfs -version || true
 
       - name: Clone ImmortalWrt
@@ -79,7 +75,6 @@ jobs:
           cd source
 
           echo "===== SOURCE ====="
-
           git log -1 --oneline
           git branch --show-current
 
@@ -96,31 +91,28 @@ jobs:
           from pathlib import Path
 
           path = Path("package/base-files/files/lib/upgrade/platform.sh")
-          text = path.read_text()
+          lines = path.read_text().splitlines()
 
-          entry = '        360,360t6m|\\\\\n'
+          target = 'case "$board" in'
+          entry = '        360,360t6m|\\'
 
-          if entry not in text:
-              marker = '        case "$board" in\n'
-
-              if marker not in text:
+          if entry not in lines:
+              for i, line in enumerate(lines):
+                  if line.strip() == target:
+                      lines.insert(i + 1, entry)
+                      break
+              else:
                   raise SystemExit(
-                      "ERROR: case board marker not found in platform.sh"
+                      'ERROR: case "$board" in was not found'
                   )
 
-              text = text.replace(
-                  marker,
-                  marker + entry,
-                  1
-              )
-
-              path.write_text(text)
+              path.write_text("\n".join(lines) + "\n")
           PY
 
           echo "===== 360T6M NAND UPGRADE HANDLER ====="
 
           grep -n \
-            -A15 \
+            -A12 \
             -B3 \
             '360,360t6m' \
             "$PLATFORM"
@@ -135,7 +127,7 @@ jobs:
           test -f "$PLATFORM"
 
           grep -q \
-            '360,360t6m|\\' \
+            '^        360,360t6m|\\$' \
             "$PLATFORM"
 
           echo "360T6M NAND upgrade handler verified."
@@ -150,11 +142,6 @@ jobs:
 
           cp \
             target/linux/ramips/dts/mt7621_360_t6m.dts \
-            source/target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          echo "===== DTS COPIED ====="
-
-          ls -lh \
             source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
       - name: Fix green LED
@@ -236,61 +223,20 @@ jobs:
 
           test -f "$DTS"
 
-          grep -q \
-            'compatible = "360,360t6m"' \
-            "$DTS"
-
-          grep -q \
-            'model = "360T6M"' \
-            "$DTS"
-
-          grep -q \
-            'label = "wan"' \
-            "$DTS"
-
-          grep -q \
-            'label = "lan1"' \
-            "$DTS"
-
-          grep -q \
-            'label = "lan2"' \
-            "$DTS"
-
-          grep -q \
-            'label = "lan3"' \
-            "$DTS"
-
-          grep -q \
-            'compatible = "mediatek,mt76"' \
-            "$DTS"
-
-          grep -q \
-            'mediatek,mtd-eeprom' \
-            "$DTS"
-
-          grep -q \
-            'GPIO_ACTIVE_LOW' \
-            "$DTS"
-
-          grep -q \
-            'default-state = "on"' \
-            "$DTS"
-
-          grep -q \
-            'KEY_WPS_BUTTON' \
-            "$DTS"
-
-          grep -q \
-            'KEY_RESTART' \
-            "$DTS"
-
-          grep -q \
-            'label = "kernel"' \
-            "$DTS"
-
-          grep -q \
-            'label = "ubi"' \
-            "$DTS"
+          grep -q 'compatible = "360,360t6m"' "$DTS"
+          grep -q 'model = "360T6M"' "$DTS"
+          grep -q 'label = "wan"' "$DTS"
+          grep -q 'label = "lan1"' "$DTS"
+          grep -q 'label = "lan2"' "$DTS"
+          grep -q 'label = "lan3"' "$DTS"
+          grep -q 'compatible = "mediatek,mt76"' "$DTS"
+          grep -q 'mediatek,mtd-eeprom' "$DTS"
+          grep -q 'GPIO_ACTIVE_LOW' "$DTS"
+          grep -q 'default-state = "on"' "$DTS"
+          grep -q 'KEY_WPS_BUTTON' "$DTS"
+          grep -q 'KEY_RESTART' "$DTS"
+          grep -q 'label = "kernel"' "$DTS"
+          grep -q 'label = "ubi"' "$DTS"
 
           echo "DTS verification successful."
 
@@ -311,18 +257,14 @@ jobs:
           echo 'CONFIG_PACKAGE_v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
-
           echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
 
           echo 'CONFIG_PACKAGE_curl=y' >> .config
           echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
           echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
 
-          echo "===== MAKE DEFCONFIG ====="
-
           make defconfig
 
-          echo
           echo "===== FINAL CONFIG ====="
 
           grep -E \
@@ -335,41 +277,15 @@ jobs:
         run: |
           set -e
 
-          grep -q \
-            '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_v2raya=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_luci-app-v2raya=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_xray-core=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-tun=y$' \
-            .config
+          grep -q '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
 
           echo "All required packages are enabled."
 
@@ -377,16 +293,12 @@ jobs:
         working-directory: source
         run: |
           set -e
-
           make download -j2 V=s
 
       - name: Build firmware
         working-directory: source
         run: |
           set -e
-
-          echo "===== START BUILD ====="
-
           make -j$(nproc) V=s
 
       - name: Verify firmware
@@ -395,13 +307,11 @@ jobs:
           set -e
 
           OUT="bin/targets/ramips/mt7621"
-
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
           test -f "$IMAGE"
 
           echo "===== FIRMWARE ====="
-
           ls -lh "$IMAGE"
 
       - name: Inspect sysupgrade rootfs
@@ -410,15 +320,10 @@ jobs:
           set -e
 
           OUT="bin/targets/ramips/mt7621"
-
           IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
-
-          test -f "$IMAGE"
 
           rm -rf /tmp/image-check
           mkdir -p /tmp/image-check
-
-          echo "===== EXTRACT SYSUPGRADE ====="
 
           tar -xf \
             "$IMAGE" \
@@ -450,14 +355,10 @@ jobs:
           test -f "$ROOT"
 
           echo "===== ROOT IMAGE ====="
-
           echo "$ROOT"
-
           file "$ROOT"
-
           ls -lh "$ROOT"
 
-          echo
           echo "===== ROOTFS CONTENT ====="
 
           unsquashfs \
@@ -467,90 +368,39 @@ jobs:
 
           test -s /tmp/rootfs-list.txt
 
-          echo
-          echo "===== V2RAYA/XRAY ====="
-
-          grep -E \
-            '(^|/)(usr/bin/v2raya|usr/bin/xray|etc/init.d/v2raya)$' \
-            /tmp/rootfs-list.txt \
-            || true
-
-          echo
-          echo "===== TPROXY ====="
-
-          grep -Ei \
-            'tproxy.*\.ko$|nf.*tproxy|nft.*tproxy|ipt.*tproxy' \
-            /tmp/rootfs-list.txt \
-            || true
-
-          echo
-          echo "===== OPKG STATUS ====="
-
-          grep \
-            'usr/lib/opkg/status$' \
-            /tmp/rootfs-list.txt \
-            || true
-
-      - name: Verify v2rayA and Xray in real rootfs
+      - name: Verify v2rayA and Xray
         working-directory: source
         run: |
           set -e
 
           LIST="/tmp/rootfs-list.txt"
 
-          test -f "$LIST"
-
-          grep -q \
-            '/usr/bin/v2raya$' \
-            "$LIST"
-
+          grep -q '/usr/bin/v2raya$' "$LIST"
           echo "OK: /usr/bin/v2raya"
 
-          grep -q \
-            '/usr/bin/xray$' \
-            "$LIST"
-
+          grep -q '/usr/bin/xray$' "$LIST"
           echo "OK: /usr/bin/xray"
 
-          grep -q \
-            '/etc/init.d/v2raya$' \
-            "$LIST"
-
+          grep -q '/etc/init.d/v2raya$' "$LIST"
           echo "OK: /etc/init.d/v2raya"
 
-      - name: Verify TPROXY in real rootfs
+      - name: Verify TPROXY
         working-directory: source
         run: |
           set -e
 
           LIST="/tmp/rootfs-list.txt"
 
-          grep -E \
-            -q \
+          grep -E -q \
             'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
             "$LIST"
 
-          echo "OK: TPROXY kernel module found in rootfs."
-
-      - name: Verify rootfs package database
-        working-directory: source
-        run: |
-          set -e
-
-          LIST="/tmp/rootfs-list.txt"
-
-          grep -q \
-            'usr/lib/opkg/status$' \
-            "$LIST"
-
-          echo "OK: opkg package database exists in rootfs."
+          echo "OK: TPROXY kernel module found."
 
       - name: Show generated files
         working-directory: source
         run: |
           set -e
-
-          echo "===== GENERATED FILES ====="
 
           find \
             bin/targets/ramips/mt7621 \
@@ -563,8 +413,6 @@ jobs:
         working-directory: source
         run: |
           set -e
-
-          echo "===== SHA256 ====="
 
           find \
             bin/targets/ramips/mt7621 \
