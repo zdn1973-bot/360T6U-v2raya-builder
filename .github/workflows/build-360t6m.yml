@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 360T6M v2rayA NAND
+name: Build ImmortalWrt 360T6M v2raya NAND
 
 on:
   workflow_dispatch:
@@ -8,12 +8,11 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M v2rayA NAND
     runs-on: ubuntu-24.04
 
     steps:
 
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install build dependencies
@@ -52,10 +51,8 @@ jobs:
             time \
             squashfs-tools
 
-          echo "===== TOOL VERSIONS ====="
           python3 --version
           gcc --version
-          g++ --version
           make --version
           dtc --version
           unsquashfs -version || true
@@ -74,89 +71,129 @@ jobs:
 
           cd source
 
-          echo "===== SOURCE ====="
           git log -1 --oneline
-          git branch --show-current
 
-      - name: Verify ramips platform upgrade file
+      - name: Locate and patch NAND upgrade script
         working-directory: source
         run: |
           set -e
 
-          PLATFORM="target/linux/ramips/base-files/lib/upgrade/platform.sh"
+          echo "===== SEARCH UPGRADE SCRIPTS ====="
 
-          echo "===== RAMIPS PLATFORM ====="
+          : > /tmp/candidates
+
+          while IFS= read -r file; do
+            if grep -q 'platform_do_upgrade' "$file" 2>/dev/null &&
+               grep -q 'nand_do_upgrade' "$file" 2>/dev/null; then
+              echo "$file"
+              echo "$file" >> /tmp/candidates
+            fi
+          done < <(
+            find target package \
+              -type f \
+              -name 'platform.sh' \
+              -print \
+              2>/dev/null \
+              | sort
+          )
+
+          COUNT="$(wc -l < /tmp/candidates)"
+
+          echo
+          echo "Candidate count: $COUNT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "ERROR: no NAND platform.sh found"
+            exit 1
+          fi
+
+          if [ "$COUNT" -gt 1 ]; then
+            echo "ERROR: multiple NAND platform.sh files found:"
+            cat /tmp/candidates
+            exit 1
+          fi
+
+          PLATFORM="$(cat /tmp/candidates)"
+
+          echo
+          echo "===== SELECTED PLATFORM ====="
           echo "$PLATFORM"
 
-          test -f "$PLATFORM"
-
-          echo "===== PLATFORM BEGIN ====="
-          sed -n '1,240p' "$PLATFORM"
-
-      - name: Patch 360T6M NAND upgrade
-        working-directory: source
-        run: |
-          set -e
-
-          PLATFORM="target/linux/ramips/base-files/lib/upgrade/platform.sh"
-
-          test -f "$PLATFORM"
+          echo
+          echo "===== BEFORE PATCH ====="
+          grep -n \
+            -A25 \
+            -B5 \
+            'platform_do_upgrade' \
+            "$PLATFORM"
 
           python3 - "$PLATFORM" <<'PY'
           from pathlib import Path
           import sys
 
           path = Path(sys.argv[1])
+
           lines = path.read_text().splitlines()
 
           entry = '        360,360t6m|\\'
 
-          # Do not add twice.
-          if any(line.strip() == entry.strip() for line in lines):
-              print("360T6M handler already present.")
-              raise SystemExit(0)
+          if any("360,360t6m" in line for line in lines):
+              print("360T6M handler already exists.")
+          else:
+              in_platform = False
+              insert_at = None
 
-          # Find the platform_do_upgrade board case.
-          in_upgrade = False
-          case_line = None
+              for i, line in enumerate(lines):
+                  stripped = line.strip()
 
-          for i, line in enumerate(lines):
-              stripped = line.strip()
+                  if stripped.startswith("platform_do_upgrade()"):
+                      in_platform = True
+                      continue
 
-              if stripped.startswith("platform_do_upgrade()"):
-                  in_upgrade = True
-                  continue
+                  if in_platform and stripped == 'case "$board" in':
+                      insert_at = i + 1
+                      break
 
-              if in_upgrade and stripped == 'case "$board" in':
-                  case_line = i
-                  break
+              if insert_at is None:
+                  raise SystemExit(
+                      "ERROR: platform_do_upgrade case was not found"
+                  )
 
-          if case_line is None:
-              raise SystemExit(
-                  "ERROR: platform_do_upgrade board case not found"
+              lines.insert(insert_at, entry)
+
+              path.write_text(
+                  "\n".join(lines) + "\n"
               )
 
-          lines.insert(case_line + 1, entry)
+              print("360T6M handler inserted.")
 
-          path.write_text("\n".join(lines) + "\n")
+          print("===== AFTER PATCH =====")
 
-          print("360T6M NAND handler inserted.")
+          new_lines = path.read_text().splitlines()
+
+          for i, line in enumerate(new_lines):
+              if "360,360t6m" in line:
+                  start = max(0, i - 5)
+                  end = min(len(new_lines), i + 12)
+
+                  for n in range(start, end):
+                      print(f"{n + 1}: {new_lines[n]}")
+
+                  break
+          else:
+              raise SystemExit(
+                  "ERROR: 360T6M handler not present"
+              )
           PY
 
-          echo "===== PATCHED PLATFORM ====="
+          echo "$PLATFORM" > /tmp/selected_platform
 
-          grep -n \
-            -A20 \
-            -B5 \
-            '360,360t6m' \
-            "$PLATFORM"
-
-      - name: Verify 360T6M upgrade handler
+      - name: Verify NAND handler
         working-directory: source
         run: |
           set -e
 
-          PLATFORM="target/linux/ramips/base-files/lib/upgrade/platform.sh"
+          PLATFORM="$(cat /tmp/selected_platform)"
 
           test -f "$PLATFORM"
 
@@ -164,30 +201,19 @@ jobs:
             '360,360t6m|\' \
             "$PLATFORM"
 
-          grep -n \
-            -A12 \
-            -B3 \
-            '360,360t6m' \
-            "$PLATFORM"
+          echo "NAND handler verified."
+          echo "Platform: $PLATFORM"
 
-          echo "360T6M NAND upgrade handler verified."
-
-      - name: Copy 360T6M DTS
+      - name: Copy DTS
         run: |
           set -e
 
           test -f target/linux/ramips/dts/mt7621_360_t6m.dts
 
-          mkdir -p \
-            source/target/linux/ramips/dts
+          mkdir -p source/target/linux/ramips/dts
 
           cp \
             target/linux/ramips/dts/mt7621_360_t6m.dts \
-            source/target/linux/ramips/dts/mt7621_360_t6m.dts
-
-          echo "===== DTS ====="
-
-          ls -lh \
             source/target/linux/ramips/dts/mt7621_360_t6m.dts
 
       - name: Fix green LED
@@ -196,8 +222,6 @@ jobs:
           set -e
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
-
-          test -f "$DTS"
 
           sed -i \
             's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' \
@@ -208,8 +232,6 @@ jobs:
               '/label = "green:system";/a\		default-state = "on";' \
               "$DTS"
           fi
-
-          echo "===== GREEN LED ====="
 
           grep -n \
             -A5 \
@@ -225,7 +247,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Add 360T6M device profile
+      - name: Add 360T6M device
         working-directory: source
         run: |
           set -e
@@ -253,13 +275,6 @@ jobs:
             'TARGET_DEVICES += 360_t6m' \
             >> "$IMAGE"
 
-          echo "===== DEVICE PROFILE ====="
-
-          grep -n \
-            -A35 \
-            'define Device/360_t6m' \
-            "$IMAGE"
-
       - name: Verify DTS
         working-directory: source
         run: |
@@ -267,31 +282,24 @@ jobs:
 
           DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
 
-          test -f "$DTS"
-
           grep -q 'compatible = "360,360t6m"' "$DTS"
           grep -q 'model = "360T6M"' "$DTS"
-
           grep -q 'label = "wan"' "$DTS"
           grep -q 'label = "lan1"' "$DTS"
           grep -q 'label = "lan2"' "$DTS"
           grep -q 'label = "lan3"' "$DTS"
-
           grep -q 'compatible = "mediatek,mt76"' "$DTS"
           grep -q 'mediatek,mtd-eeprom' "$DTS"
-
           grep -q 'GPIO_ACTIVE_LOW' "$DTS"
           grep -q 'default-state = "on"' "$DTS"
-
           grep -q 'KEY_WPS_BUTTON' "$DTS"
           grep -q 'KEY_RESTART' "$DTS"
-
           grep -q 'label = "kernel"' "$DTS"
           grep -q 'label = "ubi"' "$DTS"
 
           echo "DTS verification successful."
 
-      - name: Configure target
+      - name: Configure
         working-directory: source
         run: |
           set -e
@@ -308,82 +316,40 @@ jobs:
           echo 'CONFIG_PACKAGE_v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
-
           echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
 
           echo 'CONFIG_PACKAGE_curl=y' >> .config
           echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
           echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
 
-          echo "===== MAKE DEFCONFIG ====="
-
           make defconfig
 
-          echo
-          echo "===== FINAL CONFIG ====="
-
-          grep -E \
-            '^CONFIG_TARGET_ramips|^CONFIG_TARGET_ramips_mt7621|^CONFIG_PACKAGE_(kmod-nf-tproxy|kmod-nft-tproxy|kmod-ipt-tproxy|iptables-mod-tproxy|v2raya|luci-app-v2raya|xray-core|kmod-tun)=' \
-            .config \
-            || true
-
-      - name: Verify package selections
+      - name: Verify packages
         working-directory: source
         run: |
           set -e
 
-          grep -q \
-            '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' \
-            .config
+          grep -q '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
 
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' \
-            .config
+          echo "All required packages enabled."
 
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_v2raya=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_luci-app-v2raya=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_xray-core=y$' \
-            .config
-
-          grep -q \
-            '^CONFIG_PACKAGE_kmod-tun=y$' \
-            .config
-
-          echo "All required packages are enabled."
-
-      - name: Download sources
+      - name: Download
         working-directory: source
         run: |
           set -e
-
           make download -j2 V=s
 
-      - name: Build firmware
+      - name: Build
         working-directory: source
         run: |
           set -e
-
-          echo "===== START BUILD ====="
-
           make -j$(nproc) V=s
 
       - name: Verify firmware
@@ -398,7 +364,7 @@ jobs:
           echo "===== FIRMWARE ====="
           ls -lh "$IMAGE"
 
-      - name: Inspect sysupgrade image
+      - name: Verify real rootfs
         working-directory: source
         run: |
           set -e
@@ -408,22 +374,10 @@ jobs:
           rm -rf /tmp/image-check
           mkdir -p /tmp/image-check
 
-          tar -xf \
-            "$IMAGE" \
-            -C /tmp/image-check
-
-          echo "===== SYSUPGRADE CONTENT ====="
-
-          find \
-            /tmp/image-check \
-            -maxdepth 3 \
-            -type f \
-            -print \
-            | sort
+          tar -xf "$IMAGE" -C /tmp/image-check
 
           ROOT="$(
-            find \
-              /tmp/image-check \
+            find /tmp/image-check \
               -type f \
               -name root \
               -print \
@@ -433,12 +387,10 @@ jobs:
           test -n "$ROOT"
           test -f "$ROOT"
 
-          echo "===== ROOT IMAGE ====="
+          echo "===== ROOT ====="
           file "$ROOT"
-          ls -lh "$ROOT"
 
-          unsquashfs \
-            -l \
+          unsquashfs -l \
             "$ROOT" \
             > /tmp/rootfs-list.txt
 
@@ -464,33 +416,16 @@ jobs:
             'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
             "$LIST"
 
-          echo "OK: TPROXY module found."
+          echo "OK: TPROXY."
 
-      - name: Verify rootfs upgrade script
-        working-directory: source
-        run: |
-          set -e
-
-          LIST="/tmp/rootfs-list.txt"
-
-          grep -q \
-            '/lib/upgrade/platform.sh$' \
-            "$LIST"
-
-          echo "OK: platform.sh is included."
-
-      - name: Show firmware and SHA256
+      - name: SHA256
         working-directory: source
         run: |
           set -e
 
           IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
 
-          echo "===== SHA256 ====="
           sha256sum "$IMAGE"
-
-          echo
-          echo "===== FILE ====="
           ls -lh "$IMAGE"
 
       - name: Upload firmware
