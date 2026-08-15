@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 360T6M v2raya
+name: Build ImmortalWrt 360T6M v2rayA
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    name: Build 360T6M v2raya
+    name: Build 360T6M v2rayA
     runs-on: ubuntu-24.04
 
     steps:
@@ -83,6 +83,69 @@ jobs:
           git log -1 --oneline
           git branch --show-current
 
+      - name: Add 360T6M NAND upgrade handler
+        working-directory: source
+        run: |
+          set -e
+
+          PLATFORM="package/base-files/files/lib/upgrade/platform.sh"
+
+          test -f "$PLATFORM"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("package/base-files/files/lib/upgrade/platform.sh")
+          text = path.read_text()
+
+          entry = '        360,360t6m|\\\n'
+
+          if entry not in text:
+              marker = '        ampedwireless,ally-00x19k|\\\n'
+
+              if marker not in text:
+                  raise SystemExit(
+                      "ERROR: platform.sh insertion point not found"
+                  )
+
+              text = text.replace(
+                  marker,
+                  entry + marker,
+                  1
+              )
+
+          path.write_text(text)
+          PY
+
+          echo "===== 360T6M UPGRADE HANDLER ====="
+
+          grep -n \
+            -A12 \
+            -B3 \
+            '360,360t6m' \
+            "$PLATFORM"
+
+      - name: Verify 360T6M NAND upgrade handler
+        working-directory: source
+        run: |
+          set -e
+
+          PLATFORM="package/base-files/files/lib/upgrade/platform.sh"
+
+          test -f "$PLATFORM"
+
+          grep -q \
+            '360,360t6m|\\' \
+            "$PLATFORM"
+
+          grep -n \
+            -A8 \
+            -B2 \
+            '360,360t6m' \
+            "$PLATFORM"
+
+          echo "360T6M NAND upgrade handler verified."
+
       - name: Copy 360T6M DTS
         run: |
           set -e
@@ -121,7 +184,9 @@ jobs:
 
           echo "===== GREEN LED ====="
 
-          grep -n -A5 -B2 \
+          grep -n \
+            -A5 \
+            -B2 \
             'green:system' \
             "$DTS"
 
@@ -177,25 +242,61 @@ jobs:
 
           test -f "$DTS"
 
-          grep -q 'compatible = "360,360t6m"' "$DTS"
-          grep -q 'model = "360T6M"' "$DTS"
+          grep -q \
+            'compatible = "360,360t6m"' \
+            "$DTS"
 
-          grep -q 'label = "wan"' "$DTS"
-          grep -q 'label = "lan1"' "$DTS"
-          grep -q 'label = "lan2"' "$DTS"
-          grep -q 'label = "lan3"' "$DTS"
+          grep -q \
+            'model = "360T6M"' \
+            "$DTS"
 
-          grep -q 'compatible = "mediatek,mt76"' "$DTS"
-          grep -q 'mediatek,mtd-eeprom' "$DTS"
+          grep -q \
+            'label = "wan"' \
+            "$DTS"
 
-          grep -q 'GPIO_ACTIVE_LOW' "$DTS"
-          grep -q 'default-state = "on"' "$DTS"
+          grep -q \
+            'label = "lan1"' \
+            "$DTS"
 
-          grep -q 'KEY_WPS_BUTTON' "$DTS"
-          grep -q 'KEY_RESTART' "$DTS"
+          grep -q \
+            'label = "lan2"' \
+            "$DTS"
 
-          grep -q 'label = "kernel"' "$DTS"
-          grep -q 'label = "ubi"' "$DTS"
+          grep -q \
+            'label = "lan3"' \
+            "$DTS"
+
+          grep -q \
+            'compatible = "mediatek,mt76"' \
+            "$DTS"
+
+          grep -q \
+            'mediatek,mtd-eeprom' \
+            "$DTS"
+
+          grep -q \
+            'GPIO_ACTIVE_LOW' \
+            "$DTS"
+
+          grep -q \
+            'default-state = "on"' \
+            "$DTS"
+
+          grep -q \
+            'KEY_WPS_BUTTON' \
+            "$DTS"
+
+          grep -q \
+            'KEY_RESTART' \
+            "$DTS"
+
+          grep -q \
+            'label = "kernel"' \
+            "$DTS"
+
+          grep -q \
+            'label = "ubi"' \
+            "$DTS"
 
           echo "DTS verification successful."
 
@@ -309,6 +410,65 @@ jobs:
 
           ls -lh "$IMAGE"
 
+      - name: Verify platform handler in built rootfs
+        working-directory: source
+        run: |
+          set -e
+
+          OUT="bin/targets/ramips/mt7621"
+          IMAGE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          rm -rf /tmp/image-check
+          mkdir -p /tmp/image-check
+
+          tar -xf \
+            "$IMAGE" \
+            -C /tmp/image-check
+
+          ROOT="$(
+            find \
+              /tmp/image-check \
+              -type f \
+              -name root \
+              -print \
+              -quit
+          )"
+
+          test -n "$ROOT"
+          test -f "$ROOT"
+
+          echo "===== ROOT IMAGE ====="
+          echo "$ROOT"
+
+          unsquashfs -l \
+            "$ROOT" \
+            > /tmp/rootfs-list.txt
+
+          test -s /tmp/rootfs-list.txt
+
+          echo "===== PLATFORM.SH ====="
+
+          grep \
+            'etc/rc.d/.*platform' \
+            /tmp/rootfs-list.txt \
+            || true
+
+          echo
+          echo "===== UPGRADE FILES ====="
+
+          grep \
+            'lib/upgrade/platform.sh$' \
+            /tmp/rootfs-list.txt
+
+          echo
+          echo "===== PLATFORM HANDLER STRING ====="
+
+          grep -q \
+            'lib/upgrade/platform.sh' \
+            /tmp/rootfs-list.txt
+
+          echo "platform.sh exists in rootfs."
+
       - name: Inspect sysupgrade rootfs
         working-directory: source
         run: |
@@ -326,7 +486,9 @@ jobs:
 
           echo "===== EXTRACT SYSUPGRADE ====="
 
-          tar -xf "$IMAGE" -C /tmp/image-check
+          tar -xf \
+            "$IMAGE" \
+            -C /tmp/image-check
 
           echo "===== SYSUPGRADE CONTENT ====="
 
@@ -371,6 +533,7 @@ jobs:
 
           test -s /tmp/rootfs-list.txt
 
+          echo
           echo "===== V2RAYA/XRAY ====="
 
           grep -E \
@@ -492,7 +655,7 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-360T6M-v2raya-VERIFIED
+          name: ImmortalWrt-360T6M-v2raya-NAND-FIX
           path: source/bin/targets/ramips/mt7621/**/*
           if-no-files-found: error
           retention-days: 30
