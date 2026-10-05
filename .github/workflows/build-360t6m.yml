@@ -1,4 +1,1165 @@
-name: Build ImmortalWrt 360T6M Router1 v2raya
+
+Gemini
+
+دردشة
+
+Spark
+إصدار تجريبي
+محادثة جديدة
+البحث في المحادثات
+الصور
+الفيديوهات
+المكتبة
+إعداد WireGuard لـ Cloudflare WARP على OpenWrt
+تحسين أداء راوتر OpenWrt
+طريقة حظر لعبة ببجي عبر الراوتر
+تشغيل VLESS على راوتر OpenWrt
+أفضل خيارات استضافة VPS في العراق
+طلب مشاركة رابط محادثة
+أوامر تعديل قيمة TTL لنظام Android
+استغلال ثغرة CVE-2026-58159 خارج العراق
+منشور ترويجي لراوتر نتجير
+دعم OpenWrt لجهاز Zyxel VMG1312-B30A
+معرفة رموز الشريحة الإلكترونية وSNI
+مواصفات جهاز GL-MT300N-V2 وOpenWrt
+صعوبة تثبيت OpenWrt على الراوتر
+استعادة راوتر Linksys EA8100 V2
+تثبيت Homeproxy على راوتر Linksys
+تحسين وتفعيل سكربت راوتر OpenWrt
+أفضل مواقع توفير VPS بلغاري
+العودة للنظام الرسمي لجهاز Netgear
+تشغيل سينمانا عبر Tailscale التقني
+تحديث الذاكرة والملف التقني
+الذاكرة التقنية وإعدادات المستخدم زيدون
+استيراد سياق الذكاء الاصطناعي
+تثبيت OpenWrt على راوتر ZTE MF286D
+محادثة مع Gemini
+HostnameOpenWrtModel360T6MArchitectureMediaTek MT7621 ver:1 eco:3Target Platformramips/mt7621Firmware VersionImmortalWrt 23.05-SNAPSHOT r0-0f11072 / LuCI openwrt-23.05 branch git-25.294.31582-8ceae5aKernel Version5.15.198Local Time2026-10-05 23:34:34 وفق المعلومات وايضا معلومات wiregurad [Interface]
+
+PrivateKey = 6HyP2cf9CAFf6y0zZYfYwH+hcnlrIwXu0I6yfe2TUl0=
+
+Address = 172.16.0.2/32, 2606:4700:110:82a1:c5d6:8f59:d99d:4ffc/128
+
+DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
+
+MTU = 1280
+
+
+
+[Peer]
+
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+
+AllowedIPs = 0.0.0.0/0, ::/0
+
+Endpoint = engage.cloudflareclient.com:2408 قم بتنصيب wiregurad
+
+لإعداد WireGuard (والذي يبدو أنه اتصال Cloudflare WARP بناءً على الإعدادات) على نظام ImmortalWrt 23.05 الخاص بك (راوتر 360 T6M)، أسرع وأدق طريقة هي استخدام سطر الأوامر (SSH)، أو يمكنك استخدام واجهة الويب (LuCI).
+
+إليك الطريقتين، اختر ما يناسبك:
+
+الطريقة الأولى: عبر سطر الأوامر SSH (الأسرع والأدق)
+قم بتسجيل الدخول إلى الراوتر عبر SSH (باستخدام برنامج مثل PuTTY أو عبر الطرفية) والصق الأوامر التالية بالتسلسل.
+
+(ملاحظة: تم استبدال النطاق engage.cloudflareclient.com بعنوان الـ IP الخاص به 162.159.192.1 لأن راوترات OpenWrt أحياناً تواجه مشكلة في ترجمة النطاقات قبل اتصال الـ VPN).
+
+Bash
+# 1. تحديث الحزم وتثبيت أدوات WireGuard (في حال لم تكن مثبتة مسبقاً في ImmortalWrt)
+opkg update
+opkg install wireguard-tools luci-app-wireguard
+
+# 2. إنشاء واجهة WireGuard (wg0) وإضافة الإعدادات الأساسية
+uci set network.wg0=interface
+uci set network.wg0.proto='wireguard'
+uci set network.wg0.private_key='6HyP2cf9CAFf6y0zZYfYwH+hcnlrIwXu0I6yfe2TUl0='
+uci add_list network.wg0.addresses='172.16.0.2/32'
+uci add_list network.wg0.addresses='2606:4700:110:82a1:c5d6:8f59:d99d:4ffc/128'
+uci set network.wg0.mtu='1280'
+
+# 3. إعداد بيانات النظير (Peer / Cloudflare WARP)
+uci add network wireguard_wg0
+uci set network.@wireguard_wg0[-1]=wireguard_wg0
+uci set network.@wireguard_wg0[-1].name='wg0_client'
+uci set network.@wireguard_wg0[-1].public_key='bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo='
+uci set network.@wireguard_wg0[-1].endpoint_host='162.159.192.1'
+uci set network.@wireguard_wg0[-1].endpoint_port='2408'
+uci set network.@wireguard_wg0[-1].route_allowed_ips='1'
+uci set network.@wireguard_wg0[-1].persistent_keepalive='25'
+uci add_list network.@wireguard_wg0[-1].allowed_ips='0.0.0.0/0'
+uci add_list network.@wireguard_wg0[-1].allowed_ips='::/0'
+
+# 4. توجيه الواجهة إلى جدار الحماية (WAN Zone)
+uci add_list firewall.@zone[1].network='wg0'
+
+# 5. حفظ الإعدادات وإعادة تشغيل الشبكة
+uci commit
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+الطريقة الثانية: عبر واجهة الويب (LuCI)
+إذا كنت تفضل استخدام المتصفح، اتبع الخطوات التالية:
+
+إنشاء الواجهة:
+
+اذهب إلى Network -> Interfaces.
+
+انقر على Add new interface.
+
+Name: اكتب wg0.
+
+Protocol: اختر WireGuard VPN، ثم انقر Create interface.
+
+إعدادات الواجهة (General Settings):
+
+Private Key: ضع 6HyP2cf9CAFf6y0zZYfYwH+hcnlrIwXu0I6yfe2TUl0=
+
+IP Addresses: أضف 172.16.0.2/32 واضغط علامة (+) ثم أضف 2606:4700:110:82a1:c5d6:8f59:d99d:4ffc/128.
+
+الإعدادات المتقدمة (Advanced Settings):
+
+MTU: اكتب 1280.
+
+إعداد النظير (Peers):
+
+انتقل لتبويب Peers واضغط على Add peer.
+
+Public Key: ضع bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+
+Allowed IPs: أضف 0.0.0.0/0 و ::/0.
+
+تأكد من تفعيل خيار Route Allowed IPs.
+
+Endpoint Host: اكتب 162.159.192.1 (يُفضل على engage.cloudflareclient.com لضمان الاتصال).
+
+Endpoint Port: اكتب 2408.
+
+Persistent Keep Alive: اكتب 25.
+
+جدار الحماية (Firewall Settings):
+
+انتقل لتبويب Firewall Settings.
+
+في خيار Create / Assign firewall-zone، اختر المنطقة الحمراء wan.
+
+الحفظ:
+
+انقر على Save & Apply.
+
+خطوة إضافية هامة (إعداد DNS)
+بما أنك تقوم بتوجيه كل حركة المرور (0.0.0.0/0) عبر WireGuard، يجب التأكد من عدم حدوث تسريب للـ DNS وضبطه على خوادم Cloudflare المرفقة في إعداداتك:
+
+اذهب إلى Network -> DHCP and DNS.
+
+في خانة DNS forwardings، أضف 1.1.1.1 و 1.0.0.1.
+
+اضغط Save & Apply.
+
+للتحقق من نجاح الاتصال، اذهب إلى Status -> WireGuard. يجب أن ترى حجم البيانات (RX/TX) يرتفع، مما يعني أن الاتصال تم بنجاح.
+
+root@OpenWrt:~# opkg install wireguard-tools luci-app-wireguard
+
+Unknown package 'wireguard-tools'.
+
+Installing luci-proto-wireguard (git-25.294.31582-8ceae5a) to root...
+
+Downloading https://mirrors.vsean.net/openwrt/releases/23.05-SNAPSHOT/packages/mipsel_24kc/luci/luci-proto-wireguard_git-25.294.31582-8ceae5a_all.ipk
+
+Collected errors:
+
+ * pkg_hash_check_unresolved: cannot find dependency kmod-wireguard for wireguard-tools
+
+ * pkg_hash_fetch_best_installation_candidate: Packages for wireguard-tools found, but incompatible with the architectures configured
+
+ * opkg_install_cmd: Cannot install package wireguard-tools.
+
+ * satisfy_dependencies_for: Cannot satisfy the following dependencies for luci-proto-wireguard:
+
+ *      kmod-wireguard
+
+ * opkg_install_cmd: Cannot install package luci-app-wireguard.
+
+root@OpenWrt:~#
+
+هذا الخطأ شائع جداً في أنظمة OpenWrt / ImmortalWrt وتحديداً في نسخ SNAPSHOT (النسخ التجريبية أو الليلية).
+
+السبب الأساسي هو أن نسخة SNAPSHOT تقوم بتحديث النواة (Kernel) بشكل شبه يومي في مستودعات الحزم على الإنترنت. الراوتر الخاص بك يعمل بنواة إصدار 5.15.198 (تم تجميعها في وقت سابق)، بينما المستودع الآن يحتوي على حزم kmod-wireguard مخصصة لنواة أحدث قليلاً (أو بتشفير Hash مختلف)، ولأن WireGuard يحتاج إلى التعديل على نواة النظام، يرفض opkg تثبيته لحماية النظام، بالإضافة إلى أنك ربما لم تقم بتحديث قوائم الحزم (opkg update) قبل أمر التثبيت.
+
+إليك الحلول بالترتيب للتعامل مع هذه المشكلة:
+
+الخطوة 1: تحديث قوائم الحزم (مهم جداً)
+من الواضح من المخرجات أنك لم تقم بكتابة أمر التحديث قبل التثبيت، مما جعله لا يتعرف على بعض الحزم. جرب كتابة هذا الأمر أولاً:
+
+Bash
+opkg update
+ثم أعد محاولة التثبيت:
+
+Bash
+opkg install wireguard-tools luci-app-wireguard
+الخطوة 2: الإجبار على التثبيت (تخطي مشكلة الـ SNAPSHOT)
+إذا قمت بالخطوة الأولى واستمر نفس الخطأ (خاصة خطأ kmod-wireguard)، فيمكننا إجبار النظام على التثبيت بتجاهل تعارض إصدار النواة (غالباً يعمل بدون مشاكل لأن التغييرات في النواة تكون طفيفة جداً).
+
+اكتب هذا الأمر:
+
+Bash
+opkg install kmod-wireguard wireguard-tools luci-app-wireguard --force-depends
+إذا تم التثبيت بنجاح، قم بإعادة تشغيل الراوتر باستخدام أمر reboot لضمان تحميل إضافات النواة.
+
+الخطوة 3: التحقق مما إذا كان WireGuard مثبتاً بالفعل!
+العديد من نسخ ImmortalWrt المعدلة لأجهزة MT7621 تأتي مدمجة أساساً مع WireGuard في النواة ولكن بدون واجهة المستخدم.
+اكتب الأمر التالي في الواجهة (الـ Terminal):
+
+Bash
+wg
+إذا لم يظهر لك شيء (أو لم يعطك رسالة خطأ Not found): فهذا يعني أن WireGuard مثبت بالفعل لديك! يمكنك فوراً تجاهل التثبيت وتطبيق "الطريقة الأولى" (إعدادات سطر الأوامر) التي أرسلتها لك في الرد السابق بالكامل، وسيعمل معك الـ VPN مباشرة دون الحاجة لواجهة LuCI.
+
+الحل الجذري (في حال فشل كل ما سبق)
+بما أنك تستخدم نسخة SNAPSHOT، الحل الرسمي والآمن دائماً في OpenWrt لحل مشاكل الـ kmod هو تحديث النظام (Sysupgrade) إلى أحدث نسخة SNAPSHOT متاحة لراوترك (360 T6M) مع الاحتفاظ بالإعدادات، أو تثبيت إصدار مستقر (Stable) مثل 23.05.0 أو 23.05.2، وبعدها سيتم تثبيت الحزم بسلاسة.
+
+نصيحتي: جرب الخطوة 1 ثم الخطوة 2، وإذا تم التثبيت أو وجدت أن أمر wg يعمل، قم بنسخ أوامر إعداد واجهة Wireguard من ردي السابق والصقها وسيتم الاتصال بـ Cloudflare WARP بنجاح.
+
+Collected errors:
+
+ * opkg_install_cmd: Cannot install package kmod-wireguard.
+
+ * pkg_hash_check_unresolved: cannot find dependency kmod-wireguard for wireguard-tools
+
+ * pkg_hash_fetch_best_installation_candidate: Packages for wireguard-tools found, but incompatible with the architectures configured
+
+ * opkg_install_cmd: Cannot install package wireguard-tools.
+
+ * satisfy_dependencies_for: Cannot satisfy the following dependencies for luci-proto-wireguard:
+
+ *      kmod-wireguard
+
+root@OpenWrt:~#
+
+هذه المخرجات تؤكد المشكلة تماماً: راوترك يعمل بنسخة SNAPSHOT (نسخة تطويرية تتحدث يومياً)، وملفات النواة (Kernel) المتاحة حالياً على سيرفرات ImmortalWrt أصبحت أحدث من النواة الموجودة في راوترك (5.15.198). لذلك، النظام يرفض قطعياً تثبيت إضافات النواة kmod-wireguard لاختلاف الإصدار، وبدونه لا يمكن تشغيل WireGuard.
+
+بما أن التثبيت الإجباري فشل، لا يمكنك تثبيت WireGuard على نسختك الحالية عبر أوامر opkg أبداً.
+
+الحل الجذري والآمن هو تحديث النظام (Sysupgrade) إلى أحدث إصدار مستقر (Stable) بدلاً من نسخة الـ SNAPSHOT، مع دمج حزم WireGuard داخل السوفتوير قبل تحميله. لا تقلق، يمكنك القيام بذلك مع الاحتفاظ بكافة إعداداتك الحالية (بما فيها شبكات الواي فاي وكلمات المرور).
+
+إليك خطوات حل هذه المشكلة نهائياً:
+
+افتح متصفحك واذهب إلى الموقع الرسمي لمنشئ رومات ImmortalWrt:
+[https://firmware-selector.immortalwrt.org](https://firmware-selector.immortalwrt.org)
+
+في مربع البحث (Model)، ابحث عن موديل راوترك: 360 T6M (أو Qihoo 360 T6M).
+
+في خانة الإصدار (Version)، اختر أحدث إصدار مستقر (مثلاً 23.05.3 أو 23.05.4)، وتجنب اختيار SNAPSHOT.
+
+في المربع النصي الخاص بالحزم (Installed Packages)، لا تمسح المكتوب، بل انزل لآخر السطر وأضف مسافة ثم انسخ والصق هذه الحزم الثلاث:
+kmod-wireguard wireguard-tools luci-app-wireguard
+
+اضغط على زر Request Build (طلب بناء).
+
+انتظر دقيقة حتى يكتمل البناء، ثم قم بتحميل الملف الذي ينتهي بكلمة sysupgrade.bin.
+
+طريقة تثبيت الملف في الراوتر:
+
+ادخل إلى واجهة الراوتر (LuCI).
+
+اذهب إلى System ثم Backup / Flash Firmware.
+
+انزل لأسفل إلى قسم Flash new firmware image واضغط على Flash image.
+
+ارفع ملف sysupgrade.bin الذي قمت بتحميله.
+
+تأكد من وضع علامة الصح على خيار Keep settings (الاحتفاظ بالإعدادات).
+
+اضغط Continue وانتظر حتى يعيد الراوتر تشغيل نفسه (حوالي 3-5 دقائق).
+
+بمجرد عودة الراوتر للعمل، سيكون بإصدار مستقر وستجد إضافة WireGuard موجودة مسبقاً في قائمة Network -> Interfaces دون الحاجة لأي أوامر، ويمكنك حينها تطبيق إعدادات Cloudflare الخاصة بك مباشرة.
+
+الموديل غير موجود في قاعدة البيانات
+
+بما أن الموديل غير مدرج في قاعدة البيانات الرسمية (وهذا أمر شائع في أجهزة 360 المعدلة)، سنقوم بحل مشكلة توافق النواة (Kernel Mismatch) برمجياً من داخل الراوتر.
+
+سنقوم بخداع مدير الحزم لتغيير بصمة النواة (vermagic) مؤقتاً لتتطابق مع المستودع المتصل بالإنترنت، ثم تثبيت إضافات WireGuard، وبعدها إعادة البصمة إلى وضعها الأصلي لضمان استقرار النظام.
+
+الخطوة 1: تجاوز حماية النواة وتثبيت الحزم
+انسخ هذه الأوامر ككتلة واحدة والصقها في واجهة سطر الأوامر (SSH). الأوامر خالية من أي نصوص عربية لتجنب مشاكل الترميز:
+
+Bash
+opkg update
+
+CURRENT_KERNEL=$(grep -A 1 '^Package: kernel$' /usr/lib/opkg/status | grep Version | awk '{print $2}')
+REPO_KERNEL=$(opkg info kernel | grep -m 1 Version | awk '{print $2}')
+
+cp /usr/lib/opkg/status /usr/lib/opkg/status.backup
+sed -i "s/$CURRENT_KERNEL/$REPO_KERNEL/g" /usr/lib/opkg/status
+
+opkg install kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard --force-depends --force-architecture
+
+sed -i "s/$REPO_KERNEL/$CURRENT_KERNEL/g" /usr/lib/opkg/status
+
+reboot
+الخطوة 2: التحقق من التثبيت
+بعد إعادة تشغيل الراوتر، قم بتسجيل الدخول مجدداً عبر SSH واكتب هذا الأمر لاختبار عمل الإضافة:
+
+Bash
+wg
+إذا لم يظهر لك خطأ (مثل module not found)، فهذا يعني أن التثبيت تم بنجاح، ويمكنك الآن تطبيق إعدادات Cloudflare WARP التي أرسلتها لك مسبقاً سواء عبر SSH أو من خلال واجهة LuCI.
+
+ملاحظة فنية هامة:
+في حال رفضت النواة تشغيل الإضافة بعد الخطوات السابقة (أحياناً ترفض النواة الإضافات المجبرة لأسباب أمنية)، فإن الحل الأمثل والأكثر استقراراً هو الاعتماد على بيئة Image Builder لمنصة ramips/mt7621 لإنشاء روم مخصص يحتوي مسبقاً على الحزم المطلوبة. يمكنك إضافة هذه الحزم لملف البناء الخاص بك:
+
+Plaintext
+kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard
+root@OpenWrt:~#
+
+root@OpenWrt:~# CURRENT_KERNEL=$(grep -A 1 '^Package: kernel$' /usr/lib/opkg/sta
+
+tus | grep Version | awk '{print $2}')
+
+root@OpenWrt:~# REPO_KERNEL=$(opkg info kernel | grep -m 1 Version | awk '{print
+
+ $2}')
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# cp /usr/lib/opkg/status /usr/lib/opkg/status.backup
+
+root@OpenWrt:~# sed -i "s/$CURRENT_KERNEL/$REPO_KERNEL/g" /usr/lib/opkg/status
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# opkg install kmod-wireguard wireguard-tools luci-app-wireguard l
+
+uci-proto-wireguard --force-depends --force-architecture
+
+opkg: unrecognized option: force-architecture
+
+opkg must have one sub-command argument
+
+usage: opkg [options...] sub-command [arguments...]
+
+where sub-command is one of:
+
+
+
+Package Manipulation:
+
+        update                  Update list of available packages
+
+        upgrade <pkgs>          Upgrade packages
+
+        install <pkgs>          Install package(s)
+
+        configure <pkgs>        Configure unpacked package(s)
+
+        remove <pkgs|regexp>    Remove package(s)
+
+        flag <flag> <pkgs>      Flag package(s)
+
+         <flag>=hold|noprune|user|ok|installed|unpacked (one per invocation)
+
+
+
+Informational Commands:
+
+        list                    List available packages
+
+        list-installed          List installed packages
+
+        list-upgradable         List installed and upgradable packages
+
+        list-changed-conffiles  List user modified configuration files
+
+        files <pkg>             List files belonging to <pkg>
+
+        search <file|regexp>    List package providing <file>
+
+        find <regexp>           List packages whose name or description matches <regexp>
+
+        info [pkg|regexp]       Display all info for <pkg>
+
+        status [pkg|regexp]     Display all status for <pkg>
+
+        download <pkg>          Download <pkg> to current directory
+
+        compare-versions <v1> <op> <v2>
+
+                            compare versions using <= < > >= = << >>
+
+        print-architecture      List installable package architectures
+
+        depends [-A] [pkgname|pat]+
+
+        whatdepends [-A] [pkgname|pat]+
+
+        whatdependsrec [-A] [pkgname|pat]+
+
+        whatrecommends[-A] [pkgname|pat]+
+
+        whatsuggests[-A] [pkgname|pat]+
+
+        whatprovides [-A] [pkgname|pat]+
+
+        whatconflicts [-A] [pkgname|pat]+
+
+        whatreplaces [-A] [pkgname|pat]+
+
+
+
+Options:
+
+        -A                      Query all packages not just those installed
+
+        -V[<level>]             Set verbosity level to <level>.
+
+        --verbosity[=<level>]   Verbosity levels:
+
+                                        0 errors only
+
+                                        1 normal messages (default)
+
+                                        2 informative messages
+
+                                        3 debug
+
+                                        4 debug level 2
+
+        -f <conf_file>          Use <conf_file> as the opkg configuration file
+
+        --conf <conf_file>
+
+        --cache <directory>     Use a package cache
+
+        -d <dest_name>          Use <dest_name> as the the root directory for
+
+        --dest <dest_name>      package installation, removal, upgrading.
+
+                                <dest_name> should be a defined dest name from
+
+                                the configuration file, (but can also be a
+
+                                directory name in a pinch).
+
+        -o <dir>                Use <dir> as the root directory for
+
+        --offline-root <dir>    offline installation of packages.
+
+        --verify-program <path> Use the given program to verify usign signatures
+
+        --add-arch <arch>:<prio>        Register architecture with given priority
+
+        --add-dest <name>:<path>        Register destination with given path
+
+
+
+Force Options:
+
+        --force-depends         Install/remove despite failed dependencies
+
+        --force-maintainer      Overwrite preexisting config files
+
+        --force-reinstall       Reinstall package(s)
+
+        --force-overwrite       Overwrite files from other package(s)
+
+        --force-downgrade       Allow opkg to downgrade packages
+
+        --force-space           Disable free space checks
+
+        --force-postinstall     Run postinstall scripts even in offline mode
+
+        --force-remove  Remove package even if prerm script fails
+
+        --force-checksum        Don't fail on checksum mismatches
+
+        --no-check-certificate Don't validate SSL certificates
+
+        --noaction              No action -- test only
+
+        --download-only No action -- download only
+
+        --nodeps                Do not follow dependencies
+
+        --nocase                Perform case insensitive pattern matching
+
+        --size                  Print package size when listing available packages
+
+        --strip-abi             Print package name without appended ABI version
+
+        --force-removal-of-dependent-packages
+
+                                Remove package and all dependencies
+
+        --autoremove            Remove packages that were installed
+
+                                automatically to satisfy dependencies
+
+        -t                      Specify tmp-dir.
+
+        --tmp-dir               Specify tmp-dir.
+
+        -l                      Specify lists-dir.
+
+        --lists-dir             Specify lists-dir.
+
+
+
+ regexp could be something like 'pkgname*' '*file*' or similar
+
+ e.g. opkg info 'libstd*' or opkg search '*libop*' or opkg remove 'libncur*'
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# sed -i "s/$REPO_KERNEL/$CURRENT_KERNEL/g" /usr/lib/opkg/status
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# reboot
+
+الخطأ واضح جداً؛ إصدار opkg المثبت لديك لا يدعم الخيار --force-architecture.
+
+لقد قمت بتعديل السكربت وإزالة هذا الخيار، وسنكتفي بـ --force-depends لتجاوز فحص النواة.
+
+يرجى تنفيذ الخطوات التالية بالتسلسل:
+
+1. تنفيذ أوامر التثبيت المعدلة
+انسخ الكود التالي بالكامل ككتلة واحدة والصقه في سطر الأوامر (Terminal). الكود خالٍ من أي نصوص عربية لتجنب مشاكل الترميز:
+
+Bash
+opkg update
+
+CURRENT_KERNEL=$(grep -A 1 '^Package: kernel$' /usr/lib/opkg/status | grep Version | awk '{print $2}')
+REPO_KERNEL=$(opkg info kernel | grep -m 1 Version | awk '{print $2}')
+
+cp /usr/lib/opkg/status /usr/lib/opkg/status.backup
+sed -i "s/$CURRENT_KERNEL/$REPO_KERNEL/g" /usr/lib/opkg/status
+
+opkg install kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard --force-depends
+
+sed -i "s/$REPO_KERNEL/$CURRENT_KERNEL/g" /usr/lib/opkg/status
+
+reboot
+2. التحقق من التثبيت
+بعد أن يعيد الراوتر تشغيل نفسه، سجل الدخول مرة أخرى عبر SSH واكتب هذا الأمر للتحقق من أن WireGuard يعمل وللرد على نجاح الخطوة:
+
+Bash
+wg
+إذا لم تظهر لك رسالة خطأ (مثل not found)، فهذا يعني أن النواة قبلت الإضافة وتم التثبيت بنجاح.
+
+3. تطبيق إعدادات Cloudflare
+إذا نجحت الخطوة السابقة، يمكنك الآن تشغيل السكربت الخاص بإعدادات اتصال Cloudflare WARP الذي أعددته لك:
+
+Bash
+uci set network.wg0=interface
+uci set network.wg0.proto='wireguard'
+uci set network.wg0.private_key='6HyP2cf9CAFf6y0zZYfYwH+hcnlrIwXu0I6yfe2TUl0='
+uci add_list network.wg0.addresses='172.16.0.2/32'
+uci add_list network.wg0.addresses='2606:4700:110:82a1:c5d6:8f59:d99d:4ffc/128'
+uci set network.wg0.mtu='1280'
+
+uci add network wireguard_wg0
+uci set network.@wireguard_wg0[-1]=wireguard_wg0
+uci set network.@wireguard_wg0[-1].name='wg0_client'
+uci set network.@wireguard_wg0[-1].public_key='bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo='
+uci set network.@wireguard_wg0[-1].endpoint_host='162.159.192.1'
+uci set network.@wireguard_wg0[-1].endpoint_port='2408'
+uci set network.@wireguard_wg0[-1].route_allowed_ips='1'
+uci set network.@wireguard_wg0[-1].persistent_keepalive='25'
+uci add_list network.@wireguard_wg0[-1].allowed_ips='0.0.0.0/0'
+uci add_list network.@wireguard_wg0[-1].allowed_ips='::/0'
+
+uci add_list firewall.@zone[1].network='wg0'
+
+uci commit
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+root@OpenWrt:~# opkg install kmod-wireguard wireguard-tools luci-app-wireguard l
+
+uci-proto-wireguard --force-depends
+
+Unknown package 'kmod-wireguard'.
+
+Unknown package 'wireguard-tools'.
+
+Package luci-proto-wireguard (git-25.294.31582-8ceae5a) installed in root is up to date.
+
+Package luci-proto-wireguard (git-25.294.31582-8ceae5a) installed in root is up to date.
+
+Collected errors:
+
+ * opkg_install_cmd: Cannot install package kmod-wireguard.
+
+ * pkg_hash_check_unresolved: cannot find dependency kmod-wireguard for wireguard-tools
+
+ * pkg_hash_fetch_best_installation_candidate: Packages for wireguard-tools found, but incompatible with the architectures configured
+
+ * opkg_install_cmd: Cannot install package wireguard-tools.
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# sed -i "s/$REPO_KERNEL/$CURRENT_KERNEL/g" /usr/lib/opkg/status
+
+root@OpenWrt:~#
+
+root@OpenWrt:~# reboot
+
+رسالة الخطأ Unknown package تفسر كل شيء: حزم النواة الخاصة بإصدار 5.15.198 قد تم حذفها نهائياً من سيرفرات ImmortalWrt. سيرفرات الـ SNAPSHOT تقوم بحذف ملفات النواة القديمة يومياً بمجرد صدور تحديث جديد، ولا توجد أي طريقة لتحميل ملف لم يعد موجوداً على السيرفر، وهذا هو سبب فشل التثبيت الإجباري تماماً.
+
+بناءً على خبرتك الممتازة في التعامل مع معالجات ramips/mt7621 (بما فيها راوترات 360) وتعاملك السابق مع بيئة Image Builder، لديك الآن خياران لحل هذه المشكلة نهائياً:
+
+الخيار الأول: بناء النظام عبر Image Builder (الحل الجذري)
+بما أنك قمت سابقاً بإنشاء رومات مخصصة لراوترات 360، الحل الأمثل هو بناء روم مخصص جديد (أنصحك باستخدام إصدار مستقر مثل 23.05.3 أو 23.05.4 لتجنب مشاكل SNAPSHOT مستقبلاً).
+أثناء البناء، قم بتضمين حزم WireGuard في أمر make image كالتالي:
+
+Bash
+kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard
+بعدها قم بتفليش ملف sysupgrade.bin الناتج عبر واجهة الراوتر مع وضع علامة صح على Keep settings ولن تفقد أي إعدادات. بعد الإقلاع، استخدم إعدادات WARP التي أرسلتها لك.
+
+الخيار الثاني: استخدام HomeProxy / Sing-box (بدون تعديل النواة)
+أنت تستخدم حزمة HomeProxy ونواة sing-box و Xray. من المميزات القوية جداً في sing-box أنه يدعم بروتوكول WireGuard في طبقة التطبيق (User-space). هذا يعني أنه لا يحتاج إلى حزم النواة kmod-wireguard إطلاقاً ليعمل.
+
+بإمكانك إعداد اتصال Cloudflare WARP كمخرج (Outbound) داخل HomeProxy مباشرة:
+
+افتح إعدادات HomeProxy.
+
+اذهب إلى قسم Routing Node أو Outbounds.
+
+أضف عقدة (Node) جديدة واختر البروتوكول WireGuard.
+
+قم بتعبئة بياناتك التي أرسلتها لي:
+
+Server Address: 162.159.192.1
+
+Server Port: 2408
+
+Local Address: 172.16.0.2/32, 2606:4700:110:82a1:c5d6:8f59:d99d:4ffc/128
+
+Private Key: 6HyP2cf9CAFf6y0zZYfYwH+hcnlrIwXu0I6yfe2TUl0=
+
+Peer Public Key: bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+
+MTU: 1280
+
+احفظ الإعدادات واجعل هذه العقدة هي المخرج الافتراضي. سيعمل اتصال WARP لديك بكفاءة عالية وبدون الحاجة لتعقيدات الـ Kernel.
+
+هذا ملف يامال الخاص بمشروع البناء عدل عليه
+
+Python
+import re
+
+yaml_content = """name: Build ImmortalWrt 360T6M Router1 v2raya
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build 360T6M Router1 v2raya
+    runs-on: ubuntu-24.04
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          set -e
+
+          sudo apt-get update
+
+          sudo apt-get install -y \\
+            build-essential \\
+            clang \\
+            flex \\
+            bison \\
+            g++ \\
+            gawk \\
+            gcc-multilib \\
+            gettext \\
+            git \\
+            libncurses-dev \\
+            libssl-dev \\
+            python3 \\
+            python3-dev \\
+            python3-pip \\
+            python3-setuptools \\
+            rsync \\
+            unzip \\
+            zlib1g-dev \\
+            file \\
+            wget \\
+            curl \\
+            device-tree-compiler \\
+            ccache \\
+            libelf-dev \\
+            libxml-parser-perl \\
+            swig \\
+            time \\
+            squashfs-tools
+
+          echo "===== TOOLS ====="
+          python3 --version
+          gcc --version
+          g++ --version
+          make --version
+          dtc --version
+          unsquashfs -version || true
+
+      - name: Clone ImmortalWrt
+        run: |
+          set -e
+
+          rm -rf source
+
+          git clone \\
+            --depth=1 \\
+            --branch=openwrt-23.05 \\
+            https://github.com/immortalwrt/immortalwrt.git \\
+            source
+
+          cd source
+
+          echo "===== SOURCE ====="
+          git log -1 --oneline
+          git branch --show-current
+
+      - name: Patch MT7621 NAND upgrade handler
+        working-directory: source
+        run: |
+          set -e
+
+          PLATFORM="target/linux/ramips/mt7621/base-files/lib/upgrade/platform.sh"
+
+          test -f "$PLATFORM"
+
+          python3 - "$PLATFORM" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          lines = path.read_text().splitlines()
+
+          entry = '        360,360t6m|\\\\'
+
+          if not any("360,360t6m" in line for line in lines):
+              in_platform = False
+              insert_at = None
+
+              for i, line in enumerate(lines):
+                  stripped = line.strip()
+
+                  if stripped.startswith("platform_do_upgrade()"):
+                      in_platform = True
+                      continue
+
+                  if in_platform and stripped == 'case "$board" in':
+                      insert_at = i + 1
+                      break
+
+              if insert_at is None:
+                  raise SystemExit(
+                      "ERROR: platform_do_upgrade case not found"
+                  )
+
+              lines.insert(insert_at, entry)
+
+              path.write_text("\\n".join(lines) + "\\n")
+
+          print("===== MT7621 NAND HANDLER =====")
+
+          for i, line in enumerate(path.read_text().splitlines(), 1):
+              if "360,360t6m" in line:
+                  start = max(1, i - 4)
+                  end = min(len(lines), i + 10)
+
+                  for n in range(start, end + 1):
+                      print(f"{n}: {path.read_text().splitlines()[n-1]}")
+                  break
+          else:
+              raise SystemExit(
+                  "ERROR: 360T6M handler missing"
+              )
+          PY
+
+          grep -Fq \\
+            '360,360t6m|\\' \\
+            "$PLATFORM"
+
+      - name: Copy DTS
+        run: |
+          set -e
+
+          test -f target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          mkdir -p source/target/linux/ramips/dts
+
+          cp \\
+            target/linux/ramips/dts/mt7621_360_t6m.dts \\
+            source/target/linux/ramips/dts/mt7621_360_t6m.dts
+
+      - name: Fix green LED
+        working-directory: source
+        run: |
+          set -e
+
+          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
+
+          test -f "$DTS"
+
+          sed -i \\
+            's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' \\
+            "$DTS"
+
+          if ! grep -q 'default-state = "on";' "$DTS"; then
+            sed -i \\
+              '/label = "green:system";/a\\		default-state = "on";' \\
+              "$DTS"
+          fi
+
+          echo "===== GREEN LED ====="
+
+          grep -n \\
+            -A5 \\
+            -B2 \\
+            'green:system' \\
+            "$DTS"
+
+      - name: Update feeds
+        working-directory: source
+        run: |
+          set -e
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Add Router1 device profile
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="target/linux/ramips/image/mt7621.mk"
+
+          printf '%s\\n' \\
+            'define Device/360_t6m' \\
+            '  $(Device/dsa-migration)' \\
+            '  $(Device/uimage-lzma-loader)' \\
+            '  DEVICE_VENDOR := 360' \\
+            '  DEVICE_MODEL := T6M' \\
+            '  DEVICE_DTS := mt7621_360_t6m' \\
+            '  SUPPORTED_DEVICES += 360,360t6m' \\
+            '  BLOCKSIZE := 128k' \\
+            '  PAGESIZE := 2048' \\
+            '  KERNEL_SIZE := 4096k' \\
+            '  UBINIZE_OPTS := -E 5' \\
+            '  IMAGE_SIZE := 124416k' \\
+            '  IMAGES += firmware.bin' \\
+            '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \\
+            '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \\
+            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' \\
+            'endef' \\
+            'TARGET_DEVICES += 360_t6m' \\
+            >> "$IMAGE"
+
+          echo "===== DEVICE PROFILE ====="
+
+          grep -n \\
+            -A35 \\
+            'define Device/360_t6m' \\
+            "$IMAGE"
+
+      - name: Verify DTS
+        working-directory: source
+        run: |
+          set -e
+
+          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
+
+          test -f "$DTS"
+
+          grep -q 'compatible = "360,360t6m"' "$DTS"
+          grep -q 'model = "360T6M"' "$DTS"
+
+          grep -q 'label = "wan"' "$DTS"
+          grep -q 'label = "lan1"' "$DTS"
+          grep -q 'label = "lan2"' "$DTS"
+          grep -q 'label = "lan3"' "$DTS"
+
+          grep -q 'compatible = "mediatek,mt76"' "$DTS"
+          grep -q 'mediatek,mtd-eeprom' "$DTS"
+
+          grep -q 'GPIO_ACTIVE_LOW' "$DTS"
+          grep -q 'default-state = "on"' "$DTS"
+
+          grep -q 'KEY_WPS_BUTTON' "$DTS"
+          grep -q 'KEY_RESTART' "$DTS"
+
+          grep -q 'label = "kernel"' "$DTS"
+          grep -q 'label = "ubi"' "$DTS"
+
+          echo "DTS verification successful."
+
+      - name: Configure target
+        working-directory: source
+        run: |
+          set -e
+
+          echo 'CONFIG_TARGET_ramips=y' > .config
+          echo 'CONFIG_TARGET_ramips_mt7621=y' >> .config
+          echo 'CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y' >> .config
+
+          echo 'CONFIG_PACKAGE_kmod-nf-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-nft-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-ipt-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_iptables-mod-tproxy=y' >> .config
+
+          echo 'CONFIG_PACKAGE_v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+
+          echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
+          echo 'CONFIG_PACKAGE_curl=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
+
+          make defconfig
+
+      - name: Verify configuration
+        working-directory: source
+        run: |
+          set -e
+
+          grep -q \\
+            '^CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y$' \\
+            .config
+
+          grep -q '^CONFIG_PACKAGE_kmod-nf-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-ipt-tproxy=y$' .config
+          grep -q '^CONFIG_PACKAGE_iptables-mod-tproxy=y$' .config
+
+          grep -q '^CONFIG_PACKAGE_v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
+          grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
+
+          echo "Configuration verified."
+
+      - name: Download sources
+        working-directory: source
+        run: |
+          set -e
+
+          make download -j2 V=s
+
+      - name: Build
+        working-directory: source
+        run: |
+          set -e
+
+          make -j$(nproc) V=s
+
+      - name: Verify generated firmware
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          test -f "$IMAGE"
+
+          echo "===== FIRMWARE ====="
+          ls -lh "$IMAGE"
+
+      - name: Verify sysupgrade structure
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          rm -rf /tmp/image-check
+          mkdir -p /tmp/image-check
+
+          tar -xf "$IMAGE" -C /tmp/image-check
+
+          echo "===== SYSUPGRADE ====="
+
+          find \\
+            /tmp/image-check \\
+            -maxdepth 3 \\
+            -type f \\
+            -print \\
+            | sort
+
+          test -f \\
+            /tmp/image-check/sysupgrade-360_t6m/kernel
+
+          test -f \\
+            /tmp/image-check/sysupgrade-360_t6m/root
+
+          test -s \\
+            /tmp/image-check/sysupgrade-360_t6m/kernel
+
+          test -s \\
+            /tmp/image-check/sysupgrade-360_t6m/root
+
+      - name: Verify rootfs packages
+        working-directory: source
+        run: |
+          set -e
+
+          ROOT="/tmp/image-check/sysupgrade-360_t6m/root"
+
+          echo "===== ROOT TYPE ====="
+          file "$ROOT"
+
+          unsquashfs \\
+            -l \\
+            "$ROOT" \\
+            > /tmp/rootfs-list.txt
+
+          test -s /tmp/rootfs-list.txt
+
+          grep -q \\
+            '/usr/bin/v2raya$' \\
+            /tmp/rootfs-list.txt
+
+          grep -q \\
+            '/usr/bin/xray$' \\
+            /tmp/rootfs-list.txt
+
+          grep -q \\
+            '/etc/init.d/v2raya$' \\
+            /tmp/rootfs-list.txt
+
+          grep -E -q \\
+            'tproxy.*\\.ko$|nf.*tproxy.*\\.ko$|nft.*tproxy.*\\.ko$|ipt.*tproxy.*\\.ko$' \\
+            /tmp/rootfs-list.txt
+
+          echo "===== PACKAGE VERIFICATION ====="
+          echo "v2rayA: OK"
+          echo "Xray: OK"
+          echo "TPROXY: OK"
+
+      - name: Verify rootfs upgrade script
+        working-directory: source
+        run: |
+          set -e
+
+          grep -q \\
+            '/lib/upgrade/platform.sh$' \\
+            /tmp/rootfs-list.txt
+
+          echo "platform.sh: OK"
+
+      - name: Show final image
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          echo "===== FINAL IMAGE ====="
+          ls -lh "$IMAGE"
+
+          echo
+          echo "===== SHA256 ====="
+          sha256sum "$IMAGE"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-360T6M-Router1-v2raya
+          path: source/bin/targets/ramips/mt7621/**/*
+          if-no-files-found: error
+          retention-days: 30
+"""
+
+# Modifying the YAML content to include WireGuard packages
+yaml_content = yaml_content.replace(
+    "name: Build ImmortalWrt 360T6M Router1 v2raya",
+    "name: Build ImmortalWrt 360T6M Router1 v2raya_WireGuard"
+)
+
+yaml_content = yaml_content.replace(
+    "'  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' \\",
+    "'  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard' \\"
+)
+
+yaml_content = yaml_content.replace(
+    "echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config",
+    "echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config\n          echo 'CONFIG_PACKAGE_kmod-wireguard=y' >> .config\n          echo 'CONFIG_PACKAGE_wireguard-tools=y' >> .config\n          echo 'CONFIG_PACKAGE_luci-app-wireguard=y' >> .config\n          echo 'CONFIG_PACKAGE_luci-proto-wireguard=y' >> .config"
+)
+
+yaml_content = yaml_content.replace(
+    "grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config",
+    "grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config\n          grep -q '^CONFIG_PACKAGE_kmod-wireguard=y$' .config\n          grep -q '^CONFIG_PACKAGE_wireguard-tools=y$' .config\n          grep -q '^CONFIG_PACKAGE_luci-app-wireguard=y$' .config\n          grep -q '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config"
+)
+
+yaml_content = yaml_content.replace(
+    "echo \"TPROXY: OK\"",
+    "grep -q \\\n            '/usr/bin/wg$' \\\n            /tmp/rootfs-list.txt\n\n          echo \"TPROXY: OK\"\n          echo \"WireGuard: OK\""
+)
+
+yaml_content = yaml_content.replace(
+    "name: ImmortalWrt-360T6M-Router1-v2raya",
+    "name: ImmortalWrt-360T6M-Router1-v2raya-wireguard"
+)
+
+with open("build-360t6m-wireguard.yml", "w") as f:
+    f.write(yaml_content)
+
+print("File generated successfully")
+
+ناتج الرمز
+File generated successfully
+
+لقد تم تعديل ملف YML بنجاح وإضافة حزم WireGuard الخاصة بمشروعك (kmod-wireguard, wireguard-tools, luci-app-wireguard, luci-proto-wireguard).
+
+الملف جاهز للتحميل:
+
+رمز YML
+build-360t6m-wireguard
+ YML 
+التعديلات التي تمت على الملف:
+
+تمت إضافة حزم WireGuard إلى قائمة DEVICE_PACKAGES الخاصة ببروفايل الراوتر (360 T6M).
+
+تمت إضافة أوامر إدراج الحزم ضمن ملف .config لضمان بناء النواة مع دعم بروتوكول WireGuard.
+
+تمت إضافة خطوات للتحقق من وجود إعدادات الحزم ضمن قائمة Verify configuration.
+
+تمت إضافة خطوة فحص الملفات التنفيذية (مثل wg) داخل ملف squashfs للتأكد من نجاح الدمج قبل رفع الملف النهائي.
+
+تم تغيير اسم مخرج البناء (Artifact) ليكون ImmortalWrt-360T6M-Router1-v2raya-wireguard لتمييزه.
+
+يمكنك الآن رفع هذا الملف مباشرة إلى Github Actions لبدء عملية البناء.
+
+اضف اليه ايضا حزمة تثبيت zram
+
+لقد تم تعديل الملف بنجاح وإضافة حزم إعداد الذاكرة الافتراضية ZRAM إلى مشروع البناء الخاص بك.
+
+ملفك الجاهز للتحميل:
+
+رمز YML
+build-360t6m-wireguard-zram
+ YML 
+تمت إضافة الحزم التالية لضمان عمل ZRAM بكفاءة مع إمكانية التحكم بها من الواجهة:
+
+kmod-zram: نواة تشغيل ZRAM.
+
+zram-swap: السكربت المسؤول عن تفعيل مساحة الـ Swap تلقائياً عند الإقلاع.
+
+luci-app-zram: واجهة التحكم في إعدادات ZRAM من خلال صفحة LuCI لتغيير الحجم والإعدادات بسهولة.
+
+تم تحديث قائمة التحقق داخل سكربت Github Actions للتأكد من بناء الحزم وإضافتها لملف الروم النهائي، كما تم تغيير اسم المخرج النهائي (Artifact) إلى ImmortalWrt-360T6M-Router1-v2raya-wireguard-zram.
+
+
+
+
+‫Gemini هو نموذج ذكاء اصطناعي وقد يعرض معلومات خاطئة.
+
+Refining Configurations
+name: Build ImmortalWrt 360T6M Router1 v2raya_WireGuard_ZRAM
 
 on:
   workflow_dispatch:
@@ -210,7 +1371,7 @@ jobs:
             '  IMAGES += firmware.bin' \
             '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \
             '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \
-            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools' \
+            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard kmod-zram zram-swap luci-app-zram' \
             'endef' \
             'TARGET_DEVICES += 360_t6m' \
             >> "$IMAGE"
@@ -272,6 +1433,13 @@ jobs:
           echo 'CONFIG_PACKAGE_xray-core=y' >> .config
 
           echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_wireguard-tools=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-proto-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-zram=y' >> .config
+          echo 'CONFIG_PACKAGE_zram-swap=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-zram=y' >> .config
           echo 'CONFIG_PACKAGE_curl=y' >> .config
           echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
           echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
@@ -296,6 +1464,13 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-v2raya=y$' .config
           grep -q '^CONFIG_PACKAGE_xray-core=y$' .config
           grep -q '^CONFIG_PACKAGE_kmod-tun=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-wireguard=y$' .config
+          grep -q '^CONFIG_PACKAGE_wireguard-tools=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-wireguard=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-zram=y$' .config
+          grep -q '^CONFIG_PACKAGE_zram-swap=y$' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-zram=y$' .config
 
           echo "Configuration verified."
 
@@ -394,7 +1569,17 @@ jobs:
           echo "===== PACKAGE VERIFICATION ====="
           echo "v2rayA: OK"
           echo "Xray: OK"
+          grep -q \
+            '/usr/bin/wg$' \
+            /tmp/rootfs-list.txt
+
           echo "TPROXY: OK"
+          echo "WireGuard: OK"
+          grep -q \
+            '/etc/init.d/zram' \
+            /tmp/rootfs-list.txt
+
+          echo "ZRAM: OK"
 
       - name: Verify rootfs upgrade script
         working-directory: source
@@ -424,7 +1609,9 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-360T6M-Router1-v2raya
+          name: ImmortalWrt-360T6M-Router1-v2raya-wireguard-zram
           path: source/bin/targets/ramips/mt7621/**/*
           if-no-files-found: error
           retention-days: 30
+build-360t6m-wireguard-zram.yml
+جارٍ عرض "build-360t6m-wireguard-zram.yml".
