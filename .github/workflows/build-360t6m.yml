@@ -210,7 +210,7 @@ jobs:
             '  IMAGES += firmware.bin' \
             '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \
             '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \
-            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard kmod-zram zram-swap luci-app-zram' \
+            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard kmod-zsmalloc kmod-zram zram-swap luci-app-zram' \
             'endef' \
             'TARGET_DEVICES += 360_t6m' \
             >> "$IMAGE"
@@ -276,6 +276,7 @@ jobs:
           echo 'CONFIG_PACKAGE_wireguard-tools=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-wireguard=y' >> .config
           echo 'CONFIG_PACKAGE_luci-proto-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-zsmalloc=y' >> .config
           echo 'CONFIG_PACKAGE_kmod-zram=y' >> .config
           echo 'CONFIG_PACKAGE_zram-swap=y' >> .config
           echo 'CONFIG_PACKAGE_luci-app-zram=y' >> .config
@@ -307,6 +308,7 @@ jobs:
           grep -q '^CONFIG_PACKAGE_wireguard-tools=y$' .config
           grep -q '^CONFIG_PACKAGE_luci-app-wireguard=y$' .config
           grep -q '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config
+          grep -q '^CONFIG_PACKAGE_kmod-zsmalloc=y$' .config
           grep -q '^CONFIG_PACKAGE_kmod-zram=y$' .config
           grep -q '^CONFIG_PACKAGE_zram-swap=y$' .config
           grep -q '^CONFIG_PACKAGE_luci-app-zram=y$' .config
