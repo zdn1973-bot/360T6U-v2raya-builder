@@ -399,52 +399,33 @@ jobs:
           echo "===== ROOT TYPE ====="
           file "$ROOT"
 
-          unsquashfs \
-            -l \
-            "$ROOT" \
-            > /tmp/rootfs-list.txt
-
+          unsquashfs -l "$ROOT" > /tmp/rootfs-list.txt
           test -s /tmp/rootfs-list.txt
 
-          grep -q \
-            '/usr/bin/v2raya$' \
-            /tmp/rootfs-list.txt
-
-          grep -q \
-            '/usr/bin/xray$' \
-            /tmp/rootfs-list.txt
-
-          grep -q \
-            '/etc/init.d/v2raya$' \
-            /tmp/rootfs-list.txt
-
-          grep -E -q \
-            'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
-            /tmp/rootfs-list.txt
-
-          echo "===== PACKAGE VERIFICATION ====="
+          echo "===== v2rayA / Xray ====="
+          grep -q '/usr/bin/v2raya$' /tmp/rootfs-list.txt
+          grep -q '/usr/bin/xray$' /tmp/rootfs-list.txt
+          grep -q '/etc/init.d/v2raya$' /tmp/rootfs-list.txt
           echo "v2rayA: OK"
           echo "Xray: OK"
-          grep -q \
-            '/usr/bin/wg$' \
-            /tmp/rootfs-list.txt
 
+          echo "===== TPROXY ====="
+          grep -E -q 'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' /tmp/rootfs-list.txt
           echo "TPROXY: OK"
-          echo "WireGuard: OK"
-          grep -q \
-            '/etc/init.d/zram' \
-            /tmp/rootfs-list.txt
 
-          grep -E -q \
-            '/lib/modules/[^/]+/zsmalloc\.ko$' \
-            /tmp/rootfs-list.txt
+          echo "===== WireGuard ====="
+          grep -q '/usr/bin/wg$' /tmp/rootfs-list.txt
+          grep -E -q '/lib/modules/[^/]+/wireguard\.ko$' /tmp/rootfs-list.txt
+          echo "wireguard-tools: OK"
+          echo "wireguard.ko: OK"
 
-          grep -E -q \
-            '/lib/modules/[^/]+/zram\.ko$' \
-            /tmp/rootfs-list.txt
-
-          echo "ZRAM: OK"
-          echo "ZSMALLOC/ZRAM kernel modules: OK"
+          echo "===== ZRAM ====="
+          grep -q '/etc/init.d/zram$' /tmp/rootfs-list.txt
+          grep -E -q '/lib/modules/[^/]+/zsmalloc\.ko$' /tmp/rootfs-list.txt
+          grep -E -q '/lib/modules/[^/]+/zram\.ko$' /tmp/rootfs-list.txt
+          echo "zram-swap: OK"
+          echo "zsmalloc.ko: OK"
+          echo "zram.ko: OK"
 
       - name: Verify rootfs upgrade script
         working-directory: source
