@@ -14,7 +14,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install build dependencies
         run: |
@@ -93,3 +93,422 @@ jobs:
 
           path = Path(sys.argv[1])
           lines = path.read_text().splitlines()
+
+          entry = '        360,360t6m|\\'
+
+          if not any("360,360t6m" in line for line in lines):
+              in_platform = False
+              insert_at = None
+
+              for i, line in enumerate(lines):
+                  stripped = line.strip()
+
+                  if stripped.startswith("platform_do_upgrade()"):
+                      in_platform = True
+                      continue
+
+                  if in_platform and stripped == 'case "$board" in':
+                      insert_at = i + 1
+                      break
+
+              if insert_at is None:
+                  raise SystemExit(
+                      "ERROR: platform_do_upgrade case not found"
+                  )
+
+              lines.insert(insert_at, entry)
+
+              path.write_text("\n".join(lines) + "\n")
+
+          print("===== MT7621 NAND HANDLER =====")
+
+          for i, line in enumerate(path.read_text().splitlines(), 1):
+              if "360,360t6m" in line:
+                  start = max(1, i - 4)
+                  end = min(len(lines), i + 10)
+
+                  for n in range(start, end + 1):
+                      print(f"{n}: {path.read_text().splitlines()[n-1]}")
+                  break
+          else:
+              raise SystemExit(
+                  "ERROR: 360T6M handler missing"
+              )
+          PY
+
+          grep -Fq \
+            '360,360t6m|\' \
+            "$PLATFORM"
+
+      - name: Copy DTS
+        run: |
+          set -e
+
+          test -f target/linux/ramips/dts/mt7621_360_t6m.dts
+
+          mkdir -p source/target/linux/ramips/dts
+
+          cp \
+            target/linux/ramips/dts/mt7621_360_t6m.dts \
+            source/target/linux/ramips/dts/mt7621_360_t6m.dts
+
+      - name: Fix green LED
+        working-directory: source
+        run: |
+          set -e
+
+          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
+
+          test -f "$DTS"
+
+          sed -i \
+            's/GPIO_ACTIVE_HIGH/GPIO_ACTIVE_LOW/g' \
+            "$DTS"
+
+          if ! grep -q 'default-state = "on";' "$DTS"; then
+            sed -i \
+              '/label = "green:system";/a\		default-state = "on";' \
+              "$DTS"
+          fi
+
+          echo "===== GREEN LED ====="
+
+          grep -n \
+            -A5 \
+            -B2 \
+            'green:system' \
+            "$DTS"
+
+      - name: Update feeds
+        working-directory: source
+        run: |
+          set -e
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Add Router1 device profile
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="target/linux/ramips/image/mt7621.mk"
+
+          printf '%s\n' \
+            'define Device/360_t6m' \
+            '  $(Device/dsa-migration)' \
+            '  $(Device/uimage-lzma-loader)' \
+            '  DEVICE_VENDOR := 360' \
+            '  DEVICE_MODEL := T6M' \
+            '  DEVICE_DTS := mt7621_360_t6m' \
+            '  SUPPORTED_DEVICES += 360,360t6m' \
+            '  BLOCKSIZE := 128k' \
+            '  PAGESIZE := 2048' \
+            '  KERNEL_SIZE := 4096k' \
+            '  UBINIZE_OPTS := -E 5' \
+            '  IMAGE_SIZE := 124416k' \
+            '  IMAGES += firmware.bin' \
+            '  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata' \
+            '  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size' \
+            '  DEVICE_PACKAGES += kmod-mt7915e kmod-mt7915-firmware kmod-nf-tproxy kmod-nft-tproxy kmod-ipt-tproxy iptables-mod-tproxy v2raya luci-app-v2raya xray-core kmod-tun uboot-envtools kmod-wireguard wireguard-tools luci-proto-wireguard kmod-zram zram-swap' \
+            'endef' \
+            'TARGET_DEVICES += 360_t6m' \
+            >> "$IMAGE"
+
+          echo "===== DEVICE PROFILE ====="
+
+          grep -n \
+            -A35 \
+            'define Device/360_t6m' \
+            "$IMAGE"
+
+      - name: Verify DTS
+        working-directory: source
+        run: |
+          set -e
+
+          DTS="target/linux/ramips/dts/mt7621_360_t6m.dts"
+
+          test -f "$DTS"
+
+          grep -q 'compatible = "360,360t6m"' "$DTS"
+          grep -q 'model = "360T6M"' "$DTS"
+
+          grep -q 'label = "wan"' "$DTS"
+          grep -q 'label = "lan1"' "$DTS"
+          grep -q 'label = "lan2"' "$DTS"
+          grep -q 'label = "lan3"' "$DTS"
+
+          grep -q 'compatible = "mediatek,mt76"' "$DTS"
+          grep -q 'mediatek,mtd-eeprom' "$DTS"
+
+          grep -q 'GPIO_ACTIVE_LOW' "$DTS"
+          grep -q 'default-state = "on"' "$DTS"
+
+          grep -q 'KEY_WPS_BUTTON' "$DTS"
+          grep -q 'KEY_RESTART' "$DTS"
+
+          grep -q 'label = "kernel"' "$DTS"
+          grep -q 'label = "ubi"' "$DTS"
+
+          echo "DTS verification successful."
+
+      - name: Configure target
+        working-directory: source
+        run: |
+          set -e
+
+          echo 'CONFIG_TARGET_ramips=y' > .config
+          echo 'CONFIG_TARGET_ramips_mt7621=y' >> .config
+          echo 'CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y' >> .config
+
+          echo 'CONFIG_PACKAGE_kmod-nf-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-nft-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-ipt-tproxy=y' >> .config
+          echo 'CONFIG_PACKAGE_iptables-mod-tproxy=y' >> .config
+
+          echo 'CONFIG_PACKAGE_v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-app-v2raya=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+
+          echo 'CONFIG_PACKAGE_kmod-tun=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_wireguard-tools=y' >> .config
+          echo 'CONFIG_PACKAGE_luci-proto-wireguard=y' >> .config
+          echo 'CONFIG_PACKAGE_kmod-zram=y' >> .config
+          echo 'CONFIG_PACKAGE_zram-swap=y' >> .config
+          echo 'CONFIG_PACKAGE_curl=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-bundle=y' >> .config
+          echo 'CONFIG_PACKAGE_ca-certificates=y' >> .config
+
+          make defconfig
+
+      - name: Verify configuration
+        working-directory: source
+        run: |
+          set -u
+
+          echo "===== FINAL .CONFIG CHECK ====="
+
+          REQUIRED=(
+            "CONFIG_TARGET_ramips_mt7621_DEVICE_360_t6m=y"
+            "CONFIG_PACKAGE_kmod-nf-tproxy=y"
+            "CONFIG_PACKAGE_kmod-nft-tproxy=y"
+            "CONFIG_PACKAGE_kmod-ipt-tproxy=y"
+            "CONFIG_PACKAGE_iptables-mod-tproxy=y"
+            "CONFIG_PACKAGE_v2raya=y"
+            "CONFIG_PACKAGE_luci-app-v2raya=y"
+            "CONFIG_PACKAGE_xray-core=y"
+            "CONFIG_PACKAGE_kmod-tun=y"
+            "CONFIG_PACKAGE_kmod-wireguard=y"
+            "CONFIG_PACKAGE_wireguard-tools=y"
+            "CONFIG_PACKAGE_luci-proto-wireguard=y"
+            "CONFIG_PACKAGE_kmod-zram=y"
+            "CONFIG_PACKAGE_zram-swap=y"
+          )
+
+          FAILED=0
+
+          for ITEM in "${REQUIRED[@]}"; do
+            if grep -Fxq "$ITEM" .config; then
+              echo "OK   $ITEM"
+            else
+              echo "FAIL $ITEM"
+              FAILED=1
+            fi
+          done
+
+          echo
+          echo "===== ZRAM/WIREGUARD RELATED CONFIG ====="
+          grep -E '^(CONFIG_(PACKAGE_)?(kmod-zram|zram-swap|kmod-wireguard|wireguard-tools|luci-proto-wireguard)|CONFIG_ZRAM|CONFIG_ZSMALLOC)' .config || true
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo
+            echo "ERROR: One or more required packages were removed by make defconfig."
+            exit 1
+          fi
+
+          echo "Configuration verified."
+
+      - name: Download sources
+        working-directory: source
+        run: |
+          set -e
+
+          make download -j2 V=s
+
+      - name: Build
+        working-directory: source
+        run: |
+          set -e
+
+          make -j$(nproc) V=s
+
+      - name: Verify generated firmware
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          test -f "$IMAGE"
+
+          echo "===== FIRMWARE ====="
+          ls -lh "$IMAGE"
+
+      - name: Verify sysupgrade structure
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          rm -rf /tmp/image-check
+          mkdir -p /tmp/image-check
+
+          tar -xf "$IMAGE" -C /tmp/image-check
+
+          echo "===== SYSUPGRADE ====="
+
+          find \
+            /tmp/image-check \
+            -maxdepth 3 \
+            -type f \
+            -print \
+            | sort
+
+          test -f \
+            /tmp/image-check/sysupgrade-360_t6m/kernel
+
+          test -f \
+            /tmp/image-check/sysupgrade-360_t6m/root
+
+          test -s \
+            /tmp/image-check/sysupgrade-360_t6m/kernel
+
+          test -s \
+            /tmp/image-check/sysupgrade-360_t6m/root
+
+      - name: Verify rootfs packages
+        working-directory: source
+        run: |
+          set -e
+
+          ROOT="/tmp/image-check/sysupgrade-360_t6m/root"
+
+          echo "===== ROOT TYPE ====="
+          file "$ROOT"
+
+          unsquashfs \
+            -l \
+            "$ROOT" \
+            > /tmp/rootfs-list.txt
+
+          test -s /tmp/rootfs-list.txt
+
+          grep -q \
+            '/usr/bin/v2raya$' \
+            /tmp/rootfs-list.txt
+
+          grep -q \
+            '/usr/bin/xray$' \
+            /tmp/rootfs-list.txt
+
+          grep -q \
+            '/etc/init.d/v2raya$' \
+            /tmp/rootfs-list.txt
+
+          grep -E -q \
+            'tproxy.*\.ko$|nf.*tproxy.*\.ko$|nft.*tproxy.*\.ko$|ipt.*tproxy.*\.ko$' \
+            /tmp/rootfs-list.txt
+
+          echo "===== PACKAGE VERIFICATION ====="
+          echo "v2rayA: OK"
+          echo "Xray: OK"
+          grep -q \
+            '/usr/bin/wg$' \
+            /tmp/rootfs-list.txt
+
+          echo "TPROXY: OK"
+          echo "WireGuard: OK"
+          grep -q \
+            '/etc/init.d/zram' \
+            /tmp/rootfs-list.txt
+
+          grep -E -q \
+            '/lib/modules/[^/]+/zsmalloc\.ko$' \
+            /tmp/rootfs-list.txt
+
+          grep -E -q \
+            '/lib/modules/[^/]+/zram\.ko$' \
+            /tmp/rootfs-list.txt
+
+          echo "ZRAM: OK"
+          echo "ZSMALLOC/ZRAM kernel modules: OK"
+
+      - name: Verify rootfs upgrade script
+        working-directory: source
+        run: |
+          set -e
+
+          grep -q \
+            '/lib/upgrade/platform.sh$' \
+            /tmp/rootfs-list.txt
+
+          echo "platform.sh: OK"
+
+      - name: Show final image
+        working-directory: source
+        run: |
+          set -e
+
+          IMAGE="bin/targets/ramips/mt7621/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+
+          echo "===== FINAL IMAGE ====="
+          ls -lh "$IMAGE"
+
+          echo
+          echo "===== SHA256 ====="
+          sha256sum "$IMAGE"
+
+      - name: Prepare firmware artifacts
+        working-directory: source
+        run: |
+          set -e
+
+          OUT="bin/targets/ramips/mt7621"
+          SYSUPGRADE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin"
+          FIRMWARE="$OUT/immortalwrt-ramips-mt7621-360_t6m-squashfs-firmware.bin"
+
+          echo "===== ARTIFACT SOURCE ====="
+          pwd
+          echo "Output directory:"
+          ls -lah "$OUT"
+
+          test -s "$SYSUPGRADE"
+
+          rm -rf ../firmware-artifacts
+          mkdir -p ../firmware-artifacts
+
+          cp -v "$SYSUPGRADE" ../firmware-artifacts/
+
+          if [ -s "$FIRMWARE" ]; then
+            cp -v "$FIRMWARE" ../firmware-artifacts/
+          fi
+
+          if [ -s "$OUT/sha256sums" ]; then
+            cp -v "$OUT/sha256sums" ../firmware-artifacts/
+          fi
+
+          echo "===== STAGED ARTIFACTS ====="
+          ls -lah ../firmware-artifacts
+          test -s ../firmware-artifacts/immortalwrt-ramips-mt7621-360_t6m-squashfs-sysupgrade.bin
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v6
+        with:
+          name: ImmortalWrt-360T6M-v2raya-WireGuard-ZRAM
+          path: firmware-artifacts/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
